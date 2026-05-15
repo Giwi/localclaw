@@ -131,7 +131,7 @@ docker build -t localclaw .   # Or use Docker
 
 Angular 20 single-page application with:
 - Markdown rendering (marked library)
-- 5 themes: Light, Dark, Midnight, Warm, Forest
+- 2 themes: Light and Dark
 - Collapsible tool event cards showing real-time agent activity
 - Dark mode auto-detection via `prefers-color-scheme`
 - File downloads served via `/downloads` static route

@@ -1,18 +1,18 @@
 <div class="d-flex" style="height: 100dvh;">
   <!-- Sidebar -->
   <aside
-    class="d-flex flex-column flex-shrink-0"
-    [style]="'width:' + (sidebarOpen() ? '260px' : '0px') + ';min-width:' + (sidebarOpen() ? '260px' : '0px') + ';overflow:hidden;transition:width .25s ease,min-width .25s ease;background:var(--bg-sidebar);color:#e5e7eb;'"
+    class="d-flex flex-column flex-shrink-0 sidebar-glass"
+    [style]="'width:' + (sidebarOpen() ? '260px' : '0px') + ';min-width:' + (sidebarOpen() ? '260px' : '0px') + ';overflow:hidden;transition:width .25s ease,min-width .25s ease;'"
   >
     <!-- Sidebar header -->
     <div class="d-flex align-items-center justify-content-between px-3" style="height:60px;border-bottom:1px solid rgba(255,255,255,.08);">
       <div class="d-flex align-items-center gap-2">
-        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);"></div>
-        <span style="font-weight:600;font-size:15px;letter-spacing:-.3px;">localclaw</span>
+        <div class="logo-dot"></div>
+        <span class="brand-text">localclaw</span>
       </div>
       <div style="position:relative;">
         <button class="theme-toggle" (click)="toggleTheme(); $event.stopPropagation()" title="Switch theme">
-          {{ getThemeIcon() }}
+          <i class="bi {{ getThemeIcon() }}" style="font-size:18px;"></i>
         </button>
         @if (themeOpen()) {
           <div
@@ -31,9 +31,9 @@
               >
                 <span style="font-size:16px;width:20px;text-align:center;">{{ th.icon }}</span>
                 <span style="font-weight:500;">{{ th.label }}</span>
-                @if (th.value === currentTheme()) {
-                  <span style="margin-left:auto;font-size:14px;">&#10003;</span>
-                }
+                  @if (th.value === currentTheme()) {
+                    <span style="margin-left:auto;font-size:14px;"><i class="bi bi-check-lg"></i></span>
+                  }
               </div>
             }
           </div>
@@ -44,11 +44,11 @@
     <!-- New session -->
     <div class="p-2">
       <button
+        class="btn-neon"
         (click)="newSession()"
-        style="width:100%;padding:9px 14px;border-radius:var(--radius-sm);border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:500;cursor:pointer;transition:opacity var(--transition);display:flex;align-items:center;gap:6px;justify-content:center;"
-        onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'"
+        style="width:100%;padding:9px 14px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:6px;justify-content:center;"
       >
-        <span style="font-size:16px;line-height:1;">+</span> New Session
+        <span><i class="bi bi-plus-lg"></i></span> New Session
       </button>
     </div>
 
@@ -74,7 +74,7 @@
             (click)="deleteSession($event, session.id)"
             style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px;line-height:1;border-radius:4px;"
             title="Delete"
-          >&times;</button>
+          ><i class="bi bi-x"></i></button>
         </div>
       } @empty {
         <div style="text-align:center;padding:32px 16px;color:var(--text-sidebar-muted);font-size:13px;">
@@ -84,8 +84,8 @@
     </div>
 
     <!-- Sidebar footer -->
-    <div style="padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:var(--text-sidebar-muted);display:flex;align-items:center;gap:6px;">
-      <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e;"></span>
+    <div style="padding:10px 12px;border-top:1px solid var(--glass-border);font-size:11px;color:var(--text-sidebar-muted);display:flex;align-items:center;gap:6px;">
+      <span class="status-dot"></span>
       Ollama connected
     </div>
   </aside>
@@ -95,14 +95,14 @@
     (click)="toggleSidebar()"
     style="position:absolute;top:14px;left:{{ sidebarOpen() ? '268px' : '12px' }};z-index:10;width:32px;height:32px;border-radius:50%;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:left .25s ease;box-shadow:var(--shadow-sm);"
     title="Toggle sidebar"
-  >{{ sidebarOpen() ? '&#10094;' : '&#10095;' }}</button>
+  ><i class="bi" [class.bi-chevron-left]="sidebarOpen()" [class.bi-chevron-right]="!sidebarOpen()"></i></button>
 
   <!-- Main area -->
   <main class="d-flex flex-column flex-grow-1" style="background:var(--bg-primary);position:relative;">
 
     @if (currentSession(); as session) {
       <!-- Header bar -->
-      <header style="height:60px;border-bottom:1px solid var(--border-color);background:var(--bg-header);display:flex;align-items:center;justify-content:space-between;padding:0 20px 0 52px;flex-shrink:0;">
+      <header class="header-glass" style="height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 20px 0 52px;flex-shrink:0;">
         <div class="d-flex align-items-center gap-2 text-truncate">
           <span style="font-weight:600;font-size:14px;color:var(--text-primary);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
             {{ session.name }}
@@ -112,8 +112,8 @@
           </span>
         </div>
         <div class="d-flex align-items-center gap-2">
-          <button (click)="renameSession(session)" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Rename">&#9998;</button>
-          <button (click)="deleteCurrent()" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Delete session">&#128465;</button>
+          <button (click)="renameSession(session)" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Rename"><i class="bi bi-pencil"></i></button>
+          <button (click)="deleteCurrent()" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Delete session"><i class="bi bi-trash"></i></button>
         </div>
       </header>
 
@@ -160,7 +160,7 @@
                     <span style="width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;display:inline-block;"></span>
                     <span style="color:var(--accent);font-weight:600;">{{ ev.toolName }}</span>
                     <span style="color:var(--text-sidebar-muted);margin-left:auto;font-size:11px;">running...</span>
-                    <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'">&#10095;</span>
+                    <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'"><i class="bi bi-chevron-right"></i></span>
                   </div>
                   @if (ev.expanded && hasKeys(ev.toolArgs)) {
                     <div class="tool-card-body" style="color:#9ca3af;border-color:rgba(255,255,255,.08);">
@@ -170,10 +170,10 @@
                 }
                 @if (ev.type === 'tool_end') {
                   <div class="tool-card-header" (click)="toggleToolEvent(ev.id)" style="cursor:pointer;">
-                    <span style="color:var(--success);font-size:16px;">&#10003;</span>
+                    <i class="bi bi-check-circle" style="color:var(--success);font-size:16px;"></i>
                     <span style="font-weight:600;">{{ ev.toolName }}</span>
                     <span style="color:var(--text-sidebar-muted);margin-left:auto;font-size:11px;">completed</span>
-                    <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'">&#10095;</span>
+                    <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'"><i class="bi bi-chevron-right"></i></span>
                   </div>
                   @if (ev.expanded && ev.toolResult) {
                     <div class="tool-card-body" style="color:#9ca3af;border-color:rgba(255,255,255,.08);">
@@ -183,10 +183,10 @@
                 }
                 @if (ev.type === 'tool_error') {
                   <div class="tool-card-header" (click)="toggleToolEvent(ev.id)" style="cursor:pointer;">
-                    <span style="color:var(--danger);font-size:16px;">&#10007;</span>
+                    <i class="bi bi-x-circle" style="color:var(--danger);font-size:16px;"></i>
                     <span style="font-weight:600;">{{ ev.toolName }}</span>
                     <span style="color:var(--danger);margin-left:auto;font-size:11px;">failed</span>
-                    <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'">&#10095;</span>
+                    <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'"><i class="bi bi-chevron-right"></i></span>
                   </div>
                   @if (ev.expanded && ev.error) {
                     <div class="tool-card-body" style="color:#f87171;border-color:rgba(255,255,255,.08);">
@@ -214,7 +214,7 @@
 
       <!-- Input -->
       <div style="padding:12px 16px 16px;border-top:1px solid var(--border-color);background:var(--bg-primary);flex-shrink:0;">
-        <div style="max-width:800px;margin:0 auto;display:flex;gap:8px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:4px;box-shadow:var(--shadow-sm);transition:box-shadow var(--transition);">
+        <div class="input-container" style="max-width:800px;margin:0 auto;display:flex;gap:8px;background:var(--bg-input);padding:4px;">
           <input
             class="input-glow"
             placeholder="Ask me anything..."
@@ -225,14 +225,13 @@
             style="flex:1;border:none;outline:none;padding:10px 14px;font-size:14px;background:transparent;color:var(--text-primary);border-radius:10px;"
           />
           <button
+            class="btn-send"
             (click)="send()"
             [disabled]="loading() || !input().trim()"
-            style="padding:10px 20px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:13px;font-weight:500;cursor:pointer;transition:opacity var(--transition);display:flex;align-items:center;gap:6px;opacity:1;"
-            [style.opacity]="loading() || !input().trim() ? '.5' : '1'"
-            onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'"
+            style="padding:10px 20px;border-radius:10px;display:flex;align-items:center;gap:6px;"
           >
             Send
-            <span style="font-size:16px;">&#10148;</span>
+            <i class="bi bi-arrow-right"></i>
           </button>
         </div>
         <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--text-secondary);">

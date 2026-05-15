@@ -33,11 +33,8 @@ export class App implements OnInit {
   sidebarOpen = signal(true)
 
   themes = [
-    { value: 'light', label: 'Light', icon: '☀️' },
-    { value: 'dark', label: 'Dark', icon: '🌙' },
-    { value: 'midnight', label: 'Midnight', icon: '🌠' },
-    { value: 'warm', label: 'Warm', icon: '🔥' },
-    { value: 'forest', label: 'Forest', icon: '🌲' },
+    { value: 'light', label: 'Light', icon: 'bi-sun-fill' },
+    { value: 'dark', label: 'Dark', icon: 'bi-moon-fill' },
   ]
 
   chatContainer = viewChild<ElementRef>('chatContainer')
