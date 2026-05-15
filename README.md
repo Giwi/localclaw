@@ -64,6 +64,9 @@ All settings via `.env`:
 | `LOCALCLAW_SEARXNG_URL` | `http://localhost:8888` | SearXNG search URL (empty = DuckDuckGo fallback) |
 | `LOCALCLAW_OPENCODE_BIN` | `opencode` | OpenCode binary path |
 | `LOCALCLAW_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
+| `LOCALCLAW_SANDBOX_ENABLED` | `false` | Wrap code execution in Docker containers |
+| `LOCALCLAW_SANDBOX_IMAGE` | `ubuntu:22.04` | Docker image for sandboxed execution |
+| `LOCALCLAW_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model for RAG memory |
 
 ## How It Works
 
@@ -77,10 +80,23 @@ All settings via `.env`:
 ### Built-in Tools
 
 - **web_fetch** — Search the web (SearXNG → DuckDuckGo) or fetch a specific URL. Supports `text`, `images`, and `download` modes. Validates domain existence before fetching.
+- **generate_image** — Generate images using Ollama image models (flux, sd, stable-diffusion). Saves to downloads directory.
 - **read_file** / **write_file** — Read and write files on the local filesystem.
-- **run_bash** — Execute any bash command (60s timeout, 10MB output buffer).
+- **run_bash** — Execute any bash command (60s timeout, 10MB output buffer). Respects sandbox mode when enabled.
 - **opencode_task** — Delegate complex multi-step coding tasks to OpenCode.
-- **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash.
+- **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash. Execution respects sandbox mode.
+
+### RAG Memory
+
+Tool results are automatically embedded (via Ollama embeddings API) and stored in SQLite. At the start of each conversation turn, the agent retrieves semantically relevant past tool results and injects them into the system prompt — enabling cross-session memory without filling the context window.
+
+### Code Execution Sandbox
+
+When `LOCALCLAW_SANDBOX_ENABLED=true`, `run_bash` and `create_tool` executions are wrapped in Docker containers with `--network none`, `--security-opt no-new-privileges`, and `--cap-drop ALL` for safe code execution.
+
+### Image Generation
+
+The `generate_image` tool calls Ollama's `/api/generate` with image models (flux, sd, etc.). Generated images are saved to the downloads directory and returned as URLs.
 
 ### Persistence & Resilience
 
@@ -130,7 +146,7 @@ docker build -t localclaw .   # Or use Docker
 ## Frontend
 
 Angular 20 single-page application with:
-- Markdown rendering (marked library)
+- Markdown rendering with syntax highlighting (highlight.js, atom-one-dark theme)
 - 2 themes: Light and Dark
 - Collapsible tool event cards showing real-time agent activity
 - Dark mode auto-detection via `prefers-color-scheme`

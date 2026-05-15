@@ -10,6 +10,8 @@ import { writeFileTool } from './builtin/write-file.js'
 import { runBashTool } from './builtin/run-bash.js'
 import { opencodeTaskTool } from './builtin/opencode-task.js'
 import { webFetchTool } from './builtin/web-fetch.js'
+import { generateImageTool } from './builtin/generate-image.js'
+import { wrapCommand, isSandboxAvailable } from './sandbox.js'
 
 export class ToolRegistry {
   private tools = new Map<string, ToolModule>()
@@ -29,6 +31,7 @@ export class ToolRegistry {
       runBashTool,
       webFetchTool,
       opencodeTaskTool,
+      generateImageTool,
       this.createToolDefinition,
     ]) {
       this.tools.set(tool.definition.name, tool)
@@ -54,13 +57,15 @@ export class ToolRegistry {
   private async executeDynamic(def: ToolDefinition, args: Record<string, any>): Promise<string> {
     const raw = def.code || ''
     const escaped = JSON.stringify(args)
+    const useSandbox = isSandboxAvailable()
 
     if (def.language === 'python') {
       const script = raw.includes('{{args}}') ? raw.replace('{{args}}', escaped) : `${raw}\n\nimport json, sys\n_args = json.loads('${escaped.replace(/'/g, "\\'")}')\nprint(main(_args) if 'main' in dir() else _args)`
       const tmp = path.join(this.toolsDir, `_run_${Date.now()}.py`)
       try {
         fs.writeFileSync(tmp, `${raw}\n\nimport json\n_args = json.loads("""${escaped.replace(/"/g, '\\"')}""")\nprint(main(_args))`)
-      return (execSync(`python3 "${tmp}"`, EXEC_OPTS) as string).trim()
+        const cmd = useSandbox ? wrapCommand(`python3 /tmp/_run_${path.basename(tmp)}`, this.toolsDir) : `python3 "${tmp}"`
+      return (execSync(cmd, EXEC_OPTS) as string).trim()
     } finally {
       try { fs.unlinkSync(tmp) } catch {}
     }
@@ -68,10 +73,14 @@ export class ToolRegistry {
 
   if (def.language === 'bash') {
     const script = raw.replace(/\{\{args\}\}/g, escaped)
-    return (execSync(script, EXEC_OPTS) as string).trim()
+    const cmd = useSandbox ? wrapCommand(script) : script
+    return (execSync(cmd, EXEC_OPTS) as string).trim()
     }
 
-      return (execSync(`node -e "${raw.replace(/"/g, '\\"').replace(/\n/g, ';')}"`, EXEC_OPTS) as string).trim()
+    const jsScript = useSandbox
+      ? wrapCommand(`node -e "${raw.replace(/"/g, '\\"').replace(/\n/g, ';')}"`)
+      : `node -e "${raw.replace(/"/g, '\\"').replace(/\n/g, ';')}"`
+      return (execSync(jsScript, EXEC_OPTS) as string).trim()
   }
 
   private createToolDefinition: ToolModule = {

@@ -1,7 +1,10 @@
 import type { AgentEvent } from './tools/types.js'
 import type { ToolDefinition } from './tools/types.js'
+import type Database from 'better-sqlite3'
 import { ToolRegistry } from './tools/registry.js'
 import { log } from './log.js'
+import { storeMemory, searchMemories } from './db.js'
+import { embed } from './embeddings.js'
 
 const OLLAMA_BASE = process.env.LOCALCLAW_OLLAMA_URL || 'http://localhost:11434'
 const MAX_TOOL_LOOPS = 15
@@ -47,20 +50,23 @@ Available tools:
 - read_file(path) — read any file to understand the codebase or system
 - opencode_task(task) — delegate complex multi-step coding tasks to the coding agent
 - create_tool(name, description, language, code, parameters) — create a new reusable tool on the fly (supports python, javascript, bash)
+- generate_image(prompt, model, size) — generate an image using Ollama (models: flux, sd, stable-diffusion)
 
 GUIDELINES:
 - Search the web when you need information, look up documentation, or find solutions
 - Explore the user's filesystem and codebase to understand context before suggesting changes
 - Create tools with create_tool when you need to process data, generate things, or automate repetitive work
-- When asked for pictures: use web_fetch with mode="images" then display with ![alt](url)
+- When asked for pictures: use web_fetch with mode="images" then display with ![alt](url), or use generate_image to create new images
 - NEVER make up URLs or domain names. Verify domains exist before using them.
 - When stuck, try a different approach or tool — there's always another way`
 
 export class Agent {
   private toolRegistry: ToolRegistry
+  private db: Database.Database
 
-  constructor(dataDir: string) {
+  constructor(dataDir: string, db: Database.Database) {
     this.toolRegistry = new ToolRegistry(dataDir)
+    this.db = db
   }
 
   getTools() {
@@ -85,19 +91,44 @@ export class Agent {
   async *run(
     model: string,
     messages: { role: string; content: string }[],
+    sessionId?: string,
     systemPrompt?: string
   ): AsyncGenerator<AgentEvent> {
     const tools = this.buildToolDefs()
     let history = [...messages]
 
+    let systemContent = systemPrompt || SYSTEM_PROMPT
+
+    // RAG: retrieve relevant memories for the last user message
+    if (sessionId && messages.length > 0) {
+      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+      if (lastUserMsg) {
+        try {
+          const queryEmb = await embed(lastUserMsg.content)
+          if (queryEmb.length > 0) {
+            const memories = searchMemories(this.db, sessionId, queryEmb, 3)
+            if (memories.length > 0) {
+              const memoryBlock = memories
+                .map((m) => `[relevance: ${(m.score * 100).toFixed(0)}%] ${m.content}`)
+                .join('\n\n')
+              systemContent += `\n\nRELEVANT PAST CONTEXT:\n${memoryBlock}`
+              log.agent(`RAG: injected ${memories.length} relevant memory entries`)
+            }
+          }
+        } catch (err) {
+          log.agent(`RAG query failed: ${err}`)
+        }
+      }
+    }
+
     const systemMsg: { role: string; content: string } = {
       role: 'system',
-      content: systemPrompt || SYSTEM_PROMPT,
+      content: systemContent,
     }
 
     const FORCE_TOOL_MSG: { role: string; content: string } = {
       role: 'system',
-      content: 'You did NOT call any tool. Call a tool NOW. Use web_fetch, run_bash, opencode_task, or create_tool. Do not apologize — just call one.',
+      content: 'You did NOT call any tool. Call a tool NOW. Use web_fetch, run_bash, opencode_task, create_tool, or generate_image. Do not apologize — just call one.',
     }
 
     let apiMessages: any[] = [systemMsg, ...history]
@@ -249,6 +280,14 @@ export class Agent {
             tool_calls: [{ function: { name: toolName, arguments: tc.function.arguments } }],
           })
           apiMessages.push({ role: 'tool', content: result })
+
+          // Store tool result as memory for RAG
+          if (sessionId && result.length < 2000) {
+            try {
+              const emb = await embed(result.slice(0, 1000))
+              storeMemory(this.db, sessionId, `[${toolName}] ${result.slice(0, 500)}`, emb)
+            } catch { /* skip memory storage on failure */ }
+          }
         } catch (err: any) {
           log.agent(`Tool ${toolName} FAILED: ${err.message}`)
           yield { type: 'tool_error', toolName, error: err.message }

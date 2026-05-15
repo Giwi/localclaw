@@ -15,7 +15,7 @@ import fs from 'fs'
 fs.mkdirSync(path.join(DATA_DIR, 'downloads'), { recursive: true })
 
 const db = openDb(DATA_DIR)
-const agent = new Agent(DATA_DIR)
+const agent = new Agent(DATA_DIR, db)
 const app = express()
 
 app.use(cors())

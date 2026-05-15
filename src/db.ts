@@ -27,7 +27,15 @@ export function openDb(dataDir: string): BetterSqlite3.Database {
       content TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS memory_entries (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      embedding TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_memory_session ON memory_entries(session_id, created_at);
   `)
 
   log.debug('Database schema ready')
@@ -93,4 +101,40 @@ function mapSession(row: any): Session {
 
 function mapMessage(row: any): Message {
   return { id: row.id, sessionId: row.session_id, role: row.role, content: row.content, createdAt: row.created_at }
+}
+
+export function storeMemory(db: BetterSqlite3.Database, sessionId: string, content: string, embedding?: number[]) {
+  const id = crypto.randomUUID()
+  db.prepare(
+    'INSERT INTO memory_entries (id, session_id, content, embedding, created_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(id, sessionId, content, embedding ? JSON.stringify(embedding) : null, new Date().toISOString())
+}
+
+export function searchMemories(db: BetterSqlite3.Database, sessionId: string, queryEmbedding: number[], limit = 5): { content: string; score: number }[] {
+  const rows = db.prepare(
+    'SELECT content, embedding FROM memory_entries WHERE session_id = ? AND embedding IS NOT NULL ORDER BY created_at DESC LIMIT 50'
+  ).all(sessionId) as { content: string; embedding: string }[]
+
+  const scored: { content: string; score: number }[] = []
+  for (const row of rows) {
+    try {
+      const emb = JSON.parse(row.embedding) as number[]
+      const score = cosineSimilarity(queryEmbedding, emb)
+      scored.push({ content: row.content, score })
+    } catch { /* skip */ }
+  }
+
+  scored.sort((a, b) => b.score - a.score)
+  return scored.slice(0, limit)
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, na = 0, nb = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+    na += a[i] * a[i]
+    nb += b[i] * b[i]
+  }
+  const denom = Math.sqrt(na) * Math.sqrt(nb)
+  return denom === 0 ? 0 : dot / denom
 }

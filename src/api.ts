@@ -109,7 +109,7 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
     const startTime = Date.now()
 
     try {
-      for await (const event of agent.run(session.model, ollamaMessages)) {
+      for await (const event of agent.run(session.model, ollamaMessages, session.id)) {
         eventCount++
         const chunk = agentEventToChunk(event)
         res.write(`data: ${JSON.stringify(chunk)}\n\n`)
