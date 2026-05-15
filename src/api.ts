@@ -1,0 +1,157 @@
+import { Router, type Request, type Response } from 'express'
+import type Database from 'better-sqlite3'
+import {
+  createSession,
+  listSessions,
+  getSession,
+  getMessages,
+  addMessage,
+  deleteSession,
+  updateSessionName,
+} from './db.js'
+import { Agent } from './agent.js'
+import { agentEventToChunk } from './types.js'
+import { log } from './log.js'
+
+const DEFAULT_MODEL = process.env.LOCALCLAW_MODEL || 'ollama/llama3.2:3b'
+
+export function createRouter(db: Database.Database, agent: Agent): Router {
+  const router = Router()
+
+  // Request logging middleware
+  router.use((req: Request, res: Response, next) => {
+    const start = Date.now()
+    res.on('finish', () => {
+      log.api(req.method, req.originalUrl, res.statusCode, Date.now() - start)
+    })
+    next()
+  })
+
+  router.get('/health', (_req: Request, res: Response) => {
+    res.json({ status: 'ok', model: DEFAULT_MODEL, tools: agent.getTools().map((t) => t.name) })
+  })
+
+  router.get('/tools', (_req: Request, res: Response) => {
+    res.json(agent.getTools())
+  })
+
+  router.get('/sessions', (_req: Request, res: Response) => {
+    const sessions = listSessions(db)
+    res.json(sessions)
+  })
+
+  router.post('/sessions', (req: Request, res: Response) => {
+    const { name, model } = req.body || {}
+    const session = createSession(db, model || DEFAULT_MODEL, name)
+    res.status(201).json(session)
+  })
+
+  router.get('/sessions/:id', (req: Request, res: Response) => {
+    const session = getSession(db, req.params.id)
+    if (!session) {
+      res.status(404).json({ error: 'Session not found' })
+      return
+    }
+    res.json(session)
+  })
+
+  router.delete('/sessions/:id', (req: Request, res: Response) => {
+    deleteSession(db, req.params.id)
+    res.json({ ok: true })
+  })
+
+  router.patch('/sessions/:id', (req: Request, res: Response) => {
+    const { name } = req.body || {}
+    if (name) {
+      updateSessionName(db, req.params.id, name)
+    }
+    const session = getSession(db, req.params.id)
+    res.json(session)
+  })
+
+  router.get('/sessions/:id/messages', (req: Request, res: Response) => {
+    const messages = getMessages(db, req.params.id)
+    res.json(messages)
+  })
+
+  router.post('/sessions/:id/chat', async (req: Request, res: Response) => {
+    const session = getSession(db, req.params.id)
+    if (!session) {
+      log.warn(`Session ${req.params.id} not found`)
+      res.status(404).json({ error: 'Session not found' })
+      return
+    }
+
+    const { message } = req.body || {}
+    if (!message || typeof message !== 'string') {
+      log.warn(`Missing message in chat request for session ${session.id}`)
+      res.status(400).json({ error: 'message is required' })
+      return
+    }
+
+    log.info(`Chat  session=${session.id.slice(0, 8)} model=${session.model} msg="${message.slice(0, 60)}${message.length > 60 ? '...' : ''}"`)
+
+    addMessage(db, { sessionId: session.id, role: 'user', content: message })
+
+    const history = getMessages(db, session.id)
+    const ollamaMessages = history.map((m) => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: m.content,
+    }))
+
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.flushHeaders()
+
+    let fullResponse = ''
+    let eventCount = 0
+    const startTime = Date.now()
+
+    try {
+      for await (const event of agent.run(session.model, ollamaMessages)) {
+        eventCount++
+        const chunk = agentEventToChunk(event)
+        res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+
+        if (event.type === 'tool_start') {
+          log.sse(`tool_start ${event.toolName} args=${JSON.stringify(event.toolArgs).slice(0, 100)}`)
+        } else if (event.type === 'tool_end') {
+          log.sse(`tool_end   ${event.toolName} result=${(event.toolResult || '').slice(0, 80)}`)
+        } else if (event.type === 'tool_error') {
+          log.sse(`tool_error ${event.toolName} error=${event.error}`)
+        } else if (event.type === 'text') {
+          const text = event.content || ''
+          fullResponse += text
+        }
+
+        if (event.type === 'error') {
+          log.error(`Agent error: ${event.error}`)
+          res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
+          res.end()
+          return
+        }
+      }
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+      log.info(`Done  session=${session.id.slice(0, 8)} events=${eventCount} duration=${elapsed}s chars=${fullResponse.length}`)
+
+      if (fullResponse) {
+        addMessage(db, { sessionId: session.id, role: 'assistant', content: fullResponse })
+      }
+
+      if (session.name === 'New Session' && message.length > 10) {
+        const shortName = message.length > 50 ? message.slice(0, 50) + '...' : message
+        updateSessionName(db, session.id, shortName)
+      }
+
+      res.end()
+    } catch (err: any) {
+      log.error(`Chat stream error: ${err.message}`)
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`)
+      res.end()
+    }
+  })
+
+  return router
+}

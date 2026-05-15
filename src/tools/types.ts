@@ -1,0 +1,37 @@
+export interface ToolParameter {
+  type: string
+  description: string
+  enum?: string[]
+  items?: { type: string }
+}
+
+export interface ToolDefinition {
+  name: string
+  description: string
+  parameters: {
+    type: 'object'
+    properties: Record<string, ToolParameter>
+    required: string[]
+  }
+  code?: string
+  language?: 'javascript' | 'python' | 'bash'
+}
+
+export interface ToolModule {
+  definition: ToolDefinition
+  execute: (args: Record<string, any>) => Promise<string>
+}
+
+export interface ToolCall {
+  name: string
+  arguments: Record<string, any>
+}
+
+export interface AgentEvent {
+  type: 'text' | 'tool_start' | 'tool_end' | 'tool_error' | 'done' | 'error'
+  content?: string
+  toolName?: string
+  toolArgs?: Record<string, any>
+  toolResult?: string
+  error?: string
+}
