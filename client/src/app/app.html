@@ -11,33 +11,9 @@
         <span class="brand-text">localclaw</span>
       </div>
       <div style="position:relative;">
-        <button class="theme-toggle" (click)="toggleTheme(); $event.stopPropagation()" title="Switch theme">
-          <i class="bi {{ getThemeIcon() }}" style="font-size:18px;"></i>
+        <button class="theme-toggle" (click)="toggleTheme()" title="Switch theme">
+          <i class="bi" [class.bi-moon-fill]="currentTheme() === 'light'" [class.bi-sun-fill]="currentTheme() === 'dark'"></i>
         </button>
-        @if (themeOpen()) {
-          <div
-            class="theme-dropdown"
-            (click)="$event.stopPropagation()"
-            style="position:absolute;top:44px;right:0;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:4px;box-shadow:var(--shadow-lg);z-index:100;min-width:160px;"
-          >
-            @for (th of themes; track th.value) {
-              <div
-                class="theme-option"
-                (click)="setTheme(th.value)"
-                style="padding:8px 12px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-primary);transition:background var(--transition);"
-                [style]="th.value === currentTheme() ? 'background:var(--accent);color:#fff;' : ''"
-                onmouseover="this.style.background=this.dataset.selected === 'true' ? '' : 'var(--bg-sidebar-hover)'"
-                [attr.data-selected]="th.value === currentTheme()"
-              >
-                <span style="font-size:16px;width:20px;text-align:center;">{{ th.icon }}</span>
-                <span style="font-weight:500;">{{ th.label }}</span>
-                  @if (th.value === currentTheme()) {
-                    <span style="margin-left:auto;font-size:14px;"><i class="bi bi-check-lg"></i></span>
-                  }
-              </div>
-            }
-          </div>
-        }
       </div>
     </div>
 

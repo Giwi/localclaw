@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, viewChild, ElementRef, HostListener } from '@angular/core'
+import { Component, OnInit, inject, signal, viewChild, ElementRef } from '@angular/core'
 import { FormsModule } from '@angular/forms'
 import { JsonPipe, AsyncPipe } from '@angular/common'
 import { ChatService, type Session, type Message } from './chat.service'
@@ -29,42 +29,19 @@ export class App implements OnInit {
   input = signal('')
   loading = signal(false)
   currentTheme = signal('light')
-  themeOpen = signal(false)
   sidebarOpen = signal(true)
-
-  themes = [
-    { value: 'light', label: 'Light', icon: 'bi-sun-fill' },
-    { value: 'dark', label: 'Dark', icon: 'bi-moon-fill' },
-  ]
 
   chatContainer = viewChild<ElementRef>('chatContainer')
 
   ngOnInit() {
     const saved = localStorage.getItem('localclaw-theme')
-    const valid = saved && this.themes.some((t) => t.value === saved)
-    if (valid) {
-      this.currentTheme.set(saved!)
+    if (saved === 'light' || saved === 'dark') {
+      this.currentTheme.set(saved)
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       this.currentTheme.set('dark')
     }
     this.applyTheme()
     this.loadSessions()
-  }
-
-  getThemeIcon(): string {
-    const t = this.themes.find((t) => t.value === this.currentTheme())
-    return t ? t.icon : ''
-  }
-
-  setTheme(value: string) {
-    this.currentTheme.set(value)
-    this.themeOpen.set(false)
-    this.applyTheme()
-    localStorage.setItem('localclaw-theme', value)
-  }
-
-  toggleTheme() {
-    this.themeOpen.update((v) => !v)
   }
 
   toggleSidebar() {
@@ -75,9 +52,11 @@ export class App implements OnInit {
     return obj != null && typeof obj === 'object' && Object.keys(obj).length > 0
   }
 
-  @HostListener('document:click')
-  onDocClick() {
-    this.themeOpen.set(false)
+  toggleTheme() {
+    const next = this.currentTheme() === 'light' ? 'dark' : 'light'
+    this.currentTheme.set(next)
+    this.applyTheme()
+    localStorage.setItem('localclaw-theme', next)
   }
 
   private applyTheme() {
