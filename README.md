@@ -10,19 +10,26 @@ localclaw/
 │   ├── index.ts           # Express server entry point
 │   ├── agent.ts           # Agent loop — Ollama function calling, tool execution, persistence
 │   ├── api.ts             # REST API + SSE streaming for chat
-│   ├── db.ts              # SQLite sessions & messages (better-sqlite3)
+│   ├── db.ts              # SQLite sessions, messages, memories, background tasks
 │   ├── log.ts             # Structured logger with levels (debug/info/warn/error)
 │   ├── ollama.ts          # Ollama API client (streaming + non-streaming)
 │   ├── opencode.ts        # OpenCode subprocess delegation
+│   ├── embeddings.ts      # Ollama embeddings API for RAG memory
+│   ├── scheduler.ts       # Background task scheduler (polls every 30s)
 │   └── tools/
 │       ├── types.ts        # Tool type definitions
 │       ├── registry.ts     # Tool registry — builtins + dynamic create_tool
 │       └── builtin/
-│           ├── web-fetch.ts      # Web search (SearXNG / DuckDuckGo fallback) + URL fetch
+│           ├── web-fetch.ts      # Web search (SearXNG / DuckDuckGo) + URL fetch
+│           ├── fetch-news.ts     # News search (SearXNG news + RSS feeds)
 │           ├── read-file.ts      # Local file reading
 │           ├── write-file.ts     # Local file writing
-│           ├── run-bash.ts       # Bash command execution
-│           └── opencode-task.ts  # OpenCode delegation
+│           ├── run-bash.ts       # Bash command execution (streaming output)
+│           ├── opencode-task.ts  # OpenCode delegation
+│           ├── generate-image.ts # Image generation via Ollama
+│           ├── schedule-task.ts  # Background task scheduling
+│           ├── send-email.ts     # Email delivery via Mailgun
+│           └── send-telegram.ts  # Telegram bot messaging
 ├── client/                 # Angular 20 frontend
 ├── searxng/
 │   └── settings.yml        # SearXNG config (JSON API + image proxy)
@@ -67,6 +74,10 @@ All settings via `.env`:
 | `LOCALCLAW_SANDBOX_ENABLED` | `false` | Wrap code execution in Docker containers |
 | `LOCALCLAW_SANDBOX_IMAGE` | `ubuntu:22.04` | Docker image for sandboxed execution |
 | `LOCALCLAW_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model for RAG memory |
+| `LOCALCLAW_MAILGUN_API_KEY` | — | Mailgun API key for email delivery |
+| `LOCALCLAW_MAILGUN_DOMAIN` | — | Mailgun verified domain |
+| `LOCALCLAW_MAILGUN_FROM` | — | Sender email address |
+| `LOCALCLAW_TELEGRAM_BOT_TOKEN` | — | Telegram bot token for messaging |
 
 ## How It Works
 
@@ -80,10 +91,14 @@ All settings via `.env`:
 ### Built-in Tools
 
 - **web_fetch** — Search the web (SearXNG → DuckDuckGo) or fetch a specific URL. Supports `text`, `images`, and `download` modes. Validates domain existence before fetching.
+- **fetch_news** — Fetch the latest news articles on any topic. Uses SearXNG news search or RSS feeds (BBC, TechCrunch, Hacker News) as fallback.
 - **generate_image** — Generate images using Ollama image models (flux, sd, stable-diffusion). Saves to downloads directory.
 - **read_file** / **write_file** — Read and write files on the local filesystem.
-- **run_bash** — Execute any bash command (60s timeout, 10MB output buffer). Respects sandbox mode when enabled.
+- **run_bash** — Execute any bash command with real-time output streaming (120s timeout). Respects sandbox mode when enabled.
 - **opencode_task** — Delegate complex multi-step coding tasks to OpenCode.
+- **send_email** — Send email via Mailgun API. Supports plain text and HTML. Combine with background tasks for recurring delivery.
+- **send_telegram** — Send Telegram messages via bot. Includes a `get_chat_id` helper to discover chat IDs. Combine with background tasks for recurring notifications.
+- **schedule_task** — Schedule, unschedule, and list background tasks. Supports `every Xm`, `every Xh`, `daily at HH:MM`, `daily`, `weekly` schedules.
 - **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash. Execution respects sandbox mode.
 
 ### RAG Memory
@@ -105,6 +120,44 @@ The agent re-prompts itself when:
 - The model gives up with phrases like `cannot find`, `does not contain`, `pas directement`
 - The model responds with advisory text instead of using tools
 
+### Background Tasks
+
+Long-running and recurring tasks are handled by `BackgroundScheduler` (`src/scheduler.ts`), which polls the database every 30 seconds for due tasks. The agent can schedule tasks using the `schedule_task` tool:
+
+```
+schedule_task({ action: "schedule", name: "Morning news", schedule: "daily at 08:00", tool: "fetch_news", args: '{"topic":"technology"}' })
+schedule_task({ action: "schedule", name: "Email report", schedule: "every 24h", tool: "send_email", args: '{"to":"user@example.com","subject":"Daily report","body":"..."}' })
+schedule_task({ action: "list" })
+schedule_task({ action: "unschedule", task_id: "..." })
+```
+
+When a background task completes, the result is stored in the database and injected as a system message into the session — the agent sees it on the next conversation turn.
+
+### Email Delivery
+
+The `send_email` tool uses the [Mailgun API](https://documentation.mailgun.com/) to send emails. Configure in `.env`:
+
+```
+LOCALCLAW_MAILGUN_API_KEY=your-api-key
+LOCALCLAW_MAILGUN_DOMAIN=your-domain.mailgun.org
+LOCALCLAW_MAILGUN_FROM=localclaw <mailgun@your-domain.mailgun.org>
+```
+
+**Sandbox domains** require authorized recipients — add the target email in Mailgun Dashboard → Sending → Authorized Recipients.
+
+### Telegram Bot
+
+The `send_telegram` tool sends messages via a Telegram bot. Configure in `.env`:
+
+```
+LOCALCLAW_TELEGRAM_BOT_TOKEN=your-bot-token
+```
+
+Usage:
+1. Message your bot on Telegram
+2. Call `send_telegram({ action: "get_chat_id" })` to discover your chat ID
+3. Call `send_telegram({ action: "send", chat_id: "123456", text: "Hello!" })` to send messages
+
 ### Web Search
 
 Primary backend is SearXNG (Docker container on port 8888) with custom `settings.yml` that enables JSON API and image-focused engines (Pixabay, Flickr, DeviantArt, Getty, Openverse). Falls back to DuckDuckGo HTML search if SearXNG is not configured.
@@ -122,6 +175,10 @@ Primary backend is SearXNG (Docker container on port 8888) with custom `settings
 | `PATCH` | `/api/sessions/:id` | Rename session |
 | `GET` | `/api/sessions/:id/messages` | Get messages |
 | `POST` | `/api/sessions/:id/chat` | Send message (SSE streaming response) |
+| `GET` | `/api/background-tasks` | List background tasks (optional `?session_id=...`) |
+| `GET` | `/api/background-tasks/:id` | Get a background task |
+| `DELETE` | `/api/background-tasks/:id` | Delete a background task |
+| `PATCH` | `/api/background-tasks/:id` | Enable/disable a background task |
 
 ### Chat Streaming
 
@@ -130,10 +187,15 @@ Primary backend is SearXNG (Docker container on port 8888) with custom `settings
 ```
 data: {"type":"text","content":"thinking..."}
 data: {"type":"tool_start","toolName":"web_fetch","toolArgs":{...}}
+data: {"type":"tool_chunk","toolName":"web_fetch","content":"stdout line 1..."}
+data: {"type":"tool_chunk","toolName":"web_fetch","content":"stdout line 2..."}
 data: {"type":"tool_end","toolName":"web_fetch","toolResult":"..."}
+data: {"type":"tool_error","toolName":"web_fetch","error":"..."}
 data: {"type":"text","content":"final answer"}
 data: {"type":"done"}
 ```
+
+Tool execution output is streamed in real-time via `tool_chunk` events, giving visibility into long-running commands.
 
 ## Production Build
 
