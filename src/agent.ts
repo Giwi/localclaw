@@ -45,6 +45,7 @@ SEARCH STRATEGIES:
 
 Available tools:
 - web_fetch(q, mode) — search the web or fetch a URL. Set q="your query" to search, q="https://..." for a specific page, mode="images" for pictures.
+- fetch_news(topic, source) — get the latest news articles on any topic. Supports searches like "technology", "AI", "world news" and sources like reuters, bbc, techcrunch.
 - run_bash(command) — execute any bash command to explore the system, install packages, run scripts, etc.
 - write_file(path, content) — write or create any file
 - read_file(path) — read any file to understand the codebase or system

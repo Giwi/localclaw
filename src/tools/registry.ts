@@ -13,6 +13,7 @@ import { webFetchTool } from './builtin/web-fetch.js'
 import { generateImageTool } from './builtin/generate-image.js'
 import { sendEmailTool } from './builtin/send-email.js'
 import { sendTelegramTool } from './builtin/send-telegram.js'
+import { fetchNewsTool } from './builtin/fetch-news.js'
 import { wrapCommand, isSandboxAvailable } from './sandbox.js'
 
 export class ToolRegistry {
@@ -36,6 +37,7 @@ export class ToolRegistry {
       generateImageTool,
       sendEmailTool,
       sendTelegramTool,
+      fetchNewsTool,
       this.createToolDefinition,
     ]) {
       this.tools.set(tool.definition.name, tool)
