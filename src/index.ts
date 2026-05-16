@@ -6,6 +6,7 @@ import { createRouter } from './api.js'
 import { Agent } from './agent.js'
 import { BackgroundScheduler } from './scheduler.js'
 import { createScheduleTool } from './tools/builtin/schedule-task.js'
+import { createSearchKnowledgeTool } from './tools/builtin/search-knowledge.js'
 import chalk from 'chalk'
 import { log } from './log.js'
 
@@ -23,6 +24,7 @@ const agent = new Agent(DATA_DIR, db)
 const registry = agent.getToolRegistry()
 const scheduler = new BackgroundScheduler(db, registry)
 registry.register('schedule_task', createScheduleTool(db))
+registry.register('search_knowledge', createSearchKnowledgeTool(db))
 scheduler.start()
 
 const app = express()

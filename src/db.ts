@@ -3,6 +3,7 @@ import type BetterSqlite3 from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
 import type { Message, Session, BackgroundTask } from './types.js'
+import { embed } from './embeddings.js'
 import { log } from './log.js'
 
 export function openDb(dataDir: string): BetterSqlite3.Database {
@@ -50,7 +51,23 @@ export function openDb(dataDir: string): BetterSqlite3.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_memory_session ON memory_entries(session_id, created_at);
+    CREATE TABLE IF NOT EXISTS knowledge_documents (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      size INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS knowledge_chunks (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      embedding TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE INDEX IF NOT EXISTS idx_bg_tasks_next ON background_tasks(enabled, next_run_at);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_docs ON knowledge_documents(created_at);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_doc ON knowledge_chunks(document_id);
   `)
 
   log.debug('Database schema ready')
@@ -210,6 +227,51 @@ function mapBackgroundTask(row: any): BackgroundTask {
     lastError: row.last_error,
     createdAt: row.created_at,
   }
+}
+
+export function addKnowledgeDocument(db: BetterSqlite3.Database, name: string, type: string, size: number): { id: string } {
+  const id = crypto.randomUUID()
+  db.prepare('INSERT INTO knowledge_documents (id, name, type, size) VALUES (?, ?, ?, ?)').run(id, name, type, size)
+  return { id }
+}
+
+export function addKnowledgeChunk(db: BetterSqlite3.Database, documentId: string, content: string, embedding?: number[]) {
+  const id = crypto.randomUUID()
+  db.prepare(
+    'INSERT INTO knowledge_chunks (id, document_id, content, embedding) VALUES (?, ?, ?, ?)'
+  ).run(id, documentId, content, embedding ? JSON.stringify(embedding) : null)
+}
+
+export function listKnowledgeDocuments(db: BetterSqlite3.Database): { id: string; name: string; type: string; size: number; createdAt: string }[] {
+  return db.prepare('SELECT id, name, type, size, created_at FROM knowledge_documents ORDER BY created_at DESC').all()
+    .map((r: any) => ({ id: r.id, name: r.name, type: r.type, size: r.size, createdAt: r.created_at }))
+}
+
+export function deleteKnowledgeDocument(db: BetterSqlite3.Database, id: string) {
+  db.prepare('DELETE FROM knowledge_chunks WHERE document_id = ?').run(id)
+  db.prepare('DELETE FROM knowledge_documents WHERE id = ?').run(id)
+}
+
+export function searchKnowledge(db: BetterSqlite3.Database, queryEmbedding: number[], limit = 5): { content: string; score: number; documentName: string }[] {
+  const rows = db.prepare(
+    `SELECT kc.content, kc.embedding, kd.name as document_name
+     FROM knowledge_chunks kc
+     JOIN knowledge_documents kd ON kd.id = kc.document_id
+     WHERE kc.embedding IS NOT NULL
+     ORDER BY kc.created_at DESC LIMIT 100`
+  ).all() as { content: string; embedding: string; document_name: string }[]
+
+  const scored: { content: string; score: number; documentName: string }[] = []
+  for (const row of rows) {
+    try {
+      const emb = JSON.parse(row.embedding) as number[]
+      const score = cosineSimilarity(queryEmbedding, emb)
+      if (score > 0.1) scored.push({ content: row.content, score, documentName: row.document_name })
+    } catch { /* skip */ }
+  }
+
+  scored.sort((a, b) => b.score - a.score)
+  return scored.slice(0, limit)
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {

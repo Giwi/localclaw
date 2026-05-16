@@ -1,5 +1,9 @@
 import { Router, type Request, type Response } from 'express'
 import type Database from 'better-sqlite3'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
+import { execSync } from 'child_process'
 import {
   createSession,
   listSessions,
@@ -13,10 +17,17 @@ import {
   getBackgroundTask,
   updateBackgroundTask,
   deleteBackgroundTask,
+  addKnowledgeDocument,
+  addKnowledgeChunk,
+  listKnowledgeDocuments,
+  deleteKnowledgeDocument,
 } from './db.js'
+import { embed } from './embeddings.js'
 import { Agent } from './agent.js'
 import { agentEventToChunk } from './types.js'
 import { log } from './log.js'
+
+const upload = multer({ dest: '/tmp/localclaw_uploads', limits: { fileSize: 20 * 1024 * 1024 } })
 
 const DEFAULT_MODEL = process.env.LOCALCLAW_MODEL || 'ollama/llama3.2:3b'
 
@@ -101,6 +112,107 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
     updateBackgroundTask(db, req.params.id, { enabled: !!enabled })
     const task = getBackgroundTask(db, req.params.id)
     res.json(task)
+  })
+
+  router.get('/knowledge', (_req: Request, res: Response) => {
+    const docs = listKnowledgeDocuments(db)
+    res.json(docs)
+  })
+
+  router.delete('/knowledge/:id', (req: Request, res: Response) => {
+    deleteKnowledgeDocument(db, req.params.id)
+    res.json({ ok: true })
+  })
+
+  router.post('/knowledge/upload', upload.single('file'), async (req: Request, res: Response) => {
+    const file = req.file
+    if (!file) {
+      res.status(400).json({ error: 'No file uploaded. Send a multipart/form-data with a "file" field.' })
+      return
+    }
+
+    log.info(`Knowledge upload: ${file.originalname} (${(file.size / 1024).toFixed(1)} KB)`)
+
+    const ext = path.extname(file.originalname).toLowerCase()
+    let text = ''
+
+    try {
+      if (ext === '.txt' || ext === '.md') {
+        text = fs.readFileSync(file.path, 'utf-8')
+      } else if (ext === '.pdf') {
+        const outPath = file.path + '.txt'
+        execSync(`pdftotext -layout "${file.path}" "${outPath}"`, { timeout: 30000 })
+        text = fs.readFileSync(outPath, 'utf-8')
+        try { fs.unlinkSync(outPath) } catch {}
+      } else if (ext === '.docx') {
+        text = execSync(
+          `python3 -c "
+import sys, json
+try:
+  from docx import Document
+  doc = Document('${file.path.replace(/'/g, "'\\''")}')
+  print(json.dumps('\\n'.join(p.text for p in doc.paragraphs)))
+except Exception as e:
+  print(json.dumps(f'Error: {e}'))
+"`,
+          { encoding: 'utf-8', timeout: 30000 }
+        ).trim()
+        text = JSON.parse(text)
+      } else {
+        res.status(400).json({ error: `Unsupported file type: ${ext}. Supported: .txt, .md, .pdf, .docx` })
+        try { fs.unlinkSync(file.path) } catch {}
+        return
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: `Failed to extract text: ${err.message}` })
+      try { fs.unlinkSync(file.path) } catch {}
+      return
+    }
+
+    text = text.trim()
+    if (!text) {
+      res.status(400).json({ error: 'No text could be extracted from the file.' })
+      try { fs.unlinkSync(file.path) } catch {}
+      return
+    }
+
+    // Store document
+    const doc = addKnowledgeDocument(db, file.originalname, ext.slice(1), file.size)
+
+    // Chunk text into ~500 char chunks with overlap
+    const chunks: string[] = []
+    const words = text.split(/\s+/)
+    let current = ''
+    for (const word of words) {
+      if (current.length + word.length > 500 && current.length > 100) {
+        chunks.push(current.trim())
+        current = word
+      } else {
+        current += ' ' + word
+      }
+    }
+    if (current.trim()) chunks.push(current.trim())
+
+    // Embed and store each chunk
+    let embedded = 0
+    for (const chunk of chunks) {
+      try {
+        const emb = await embed(chunk.slice(0, 1000))
+        addKnowledgeChunk(db, doc.id, chunk.slice(0, 2000), emb)
+        embedded++
+      } catch { /* skip failed chunks */ }
+    }
+
+    try { fs.unlinkSync(file.path) } catch {}
+
+    log.info(`Knowledge: "${file.originalname}" → ${chunks.length} chunks, ${embedded} embedded`)
+    res.json({
+      ok: true,
+      document: doc,
+      chunks: chunks.length,
+      embedded,
+      textLength: text.length,
+    })
   })
 
   router.post('/sessions/:id/chat', async (req: Request, res: Response) => {

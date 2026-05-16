@@ -14,6 +14,8 @@ import { generateImageTool } from './builtin/generate-image.js'
 import { sendEmailTool } from './builtin/send-email.js'
 import { sendTelegramTool } from './builtin/send-telegram.js'
 import { fetchNewsTool } from './builtin/fetch-news.js'
+import { weatherTool } from './builtin/weather.js'
+import { browserAutomationTool } from './builtin/browser-automation.js'
 import { wrapCommand, isSandboxAvailable } from './sandbox.js'
 
 export class ToolRegistry {
@@ -38,6 +40,8 @@ export class ToolRegistry {
       sendEmailTool,
       sendTelegramTool,
       fetchNewsTool,
+      weatherTool,
+      browserAutomationTool,
       this.createToolDefinition,
     ]) {
       this.tools.set(tool.definition.name, tool)

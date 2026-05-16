@@ -3,7 +3,7 @@ import type { ToolDefinition } from './tools/types.js'
 import type Database from 'better-sqlite3'
 import { ToolRegistry } from './tools/registry.js'
 import { log } from './log.js'
-import { storeMemory, searchMemories } from './db.js'
+import { storeMemory, searchMemories, searchKnowledge } from './db.js'
 import { embed } from './embeddings.js'
 
 const OLLAMA_BASE = process.env.LOCALCLAW_OLLAMA_URL || 'http://localhost:11434'
@@ -46,6 +46,9 @@ SEARCH STRATEGIES:
 Available tools:
 - web_fetch(q, mode) — search the web or fetch a URL. Set q="your query" to search, q="https://..." for a specific page, mode="images" for pictures.
 - fetch_news(topic, source) — get the latest news articles on any topic. Supports searches like "technology", "AI", "world news" and sources like reuters, bbc, techcrunch.
+- weather(location, days) — get current weather and forecast for any city. Use for weather checks without web search.
+- browser_automation(url, action) — load a page in a real headless browser. Use for JavaScript-heavy sites that don't render with web_fetch. Supports screenshot mode.
+- search_knowledge(query) — search uploaded documents (PDFs, text files) by meaning. Use to find information the user has uploaded.
 - run_bash(command) — execute any bash command to explore the system, install packages, run scripts, etc.
 - write_file(path, content) — write or create any file
 - read_file(path) — read any file to understand the codebase or system
@@ -107,25 +110,65 @@ export class Agent {
 
     let systemContent = systemPrompt || SYSTEM_PROMPT
 
-    // RAG: retrieve relevant memories for the last user message
+    // RAG: retrieve relevant memories and global knowledge for the last user message
     if (sessionId && messages.length > 0) {
       const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
       if (lastUserMsg) {
         try {
           const queryEmb = await embed(lastUserMsg.content)
           if (queryEmb.length > 0) {
+            // Session-scoped memory from past tool results
             const memories = searchMemories(this.db, sessionId, queryEmb, 3)
+            // Global knowledge from uploaded documents
+            const knowledge = searchKnowledge(this.db, queryEmb, 3)
+
+            const blocks: string[] = []
             if (memories.length > 0) {
-              const memoryBlock = memories
-                .map((m) => `[relevance: ${(m.score * 100).toFixed(0)}%] ${m.content}`)
-                .join('\n\n')
-              systemContent += `\n\nRELEVANT PAST CONTEXT:\n${memoryBlock}`
-              log.agent(`RAG: injected ${memories.length} relevant memory entries`)
+              blocks.push(memories.map((m) => `[relevance: ${(m.score * 100).toFixed(0)}%] ${m.content}`).join('\n\n'))
+            }
+            if (knowledge.length > 0) {
+              blocks.push(knowledge.map((k) => `[from: ${k.documentName}, relevance: ${(k.score * 100).toFixed(0)}%] ${k.content}`).join('\n\n'))
+            }
+            if (blocks.length > 0) {
+              systemContent += `\n\nRELEVANT PAST CONTEXT:\n${blocks.join('\n\n')}`
+              log.agent(`RAG: injected ${memories.length} memories + ${knowledge.length} knowledge entries`)
             }
           }
         } catch (err) {
           log.agent(`RAG query failed: ${err}`)
         }
+      }
+    }
+
+    // Context window management: summarize old messages if history is too large
+    const totalChars = history.reduce((sum, m) => sum + m.content.length, 0)
+    if (totalChars > 8000 && history.length > 6) {
+      log.agent(`Context too large (${totalChars} chars, ${history.length} msgs), summarizing...`)
+      const keepCount = 4 // keep last 2 exchanges (user + assistant)
+      const oldMsgs = history.slice(0, -keepCount)
+      const recentMsgs = history.slice(-keepCount)
+
+      try {
+        const summaryRes = await fetch(`${OLLAMA_BASE}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: this.modelId(model),
+            prompt: `Summarize the following conversation concisely, keeping key facts, decisions, and context:\n\n${oldMsgs.map(m => `[${m.role}]: ${m.content.slice(0, 1000)}`).join('\n')}\n\nSummary:`,
+            stream: false,
+            options: { num_ctx: 4096 },
+          }),
+        })
+        if (summaryRes.ok) {
+          const summaryData = await summaryRes.json()
+          const summary = (summaryData.response || '').trim()
+          if (summary) {
+            history = [{ role: 'system', content: `Earlier conversation summary: ${summary}` }, ...recentMsgs]
+            log.agent(`Context summarized (${totalChars} → ${history.reduce((s, m) => s + m.content.length, 0)} chars)`)
+          }
+        }
+      } catch (err) {
+        log.agent(`Context summarization failed: ${err}`)
       }
     }
 
