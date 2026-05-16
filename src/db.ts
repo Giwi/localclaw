@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import type BetterSqlite3 from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
-import type { Message, Session } from './types.js'
+import type { Message, Session, BackgroundTask } from './types.js'
 import { log } from './log.js'
 
 export function openDb(dataDir: string): BetterSqlite3.Database {
@@ -34,8 +34,23 @@ export function openDb(dataDir: string): BetterSqlite3.Database {
       embedding TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS background_tasks (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      schedule TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      tool_args TEXT NOT NULL DEFAULT '{}',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      last_run_at TEXT,
+      next_run_at TEXT,
+      last_result TEXT,
+      last_error TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_memory_session ON memory_entries(session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_bg_tasks_next ON background_tasks(enabled, next_run_at);
   `)
 
   log.debug('Database schema ready')

@@ -19,7 +19,7 @@ export interface ToolDefinition {
 
 export interface ToolModule {
   definition: ToolDefinition
-  execute: (args: Record<string, any>) => Promise<string>
+  execute: (args: Record<string, any>, onChunk?: (chunk: string) => void) => Promise<string>
 }
 
 export interface ToolCall {
@@ -28,7 +28,7 @@ export interface ToolCall {
 }
 
 export interface AgentEvent {
-  type: 'text' | 'tool_start' | 'tool_end' | 'tool_error' | 'done' | 'error'
+  type: 'text' | 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error' | 'done' | 'error'
   content?: string
   toolName?: string
   toolArgs?: Record<string, any>

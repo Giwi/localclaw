@@ -19,7 +19,7 @@ export interface Message {
 }
 
 export interface StreamChunk {
-  type: 'text' | 'tool_start' | 'tool_end' | 'tool_error' | 'done' | 'error'
+  type: 'text' | 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error' | 'done' | 'error'
   content?: string
   toolName?: string
   toolArgs?: Record<string, any>

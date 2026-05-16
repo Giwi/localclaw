@@ -267,10 +267,31 @@ export class Agent {
 
         try {
           const t1 = Date.now()
-          const result = await tool.execute(args)
-          const telapsed = Date.now() - t1
-          log.agent(`Tool ${toolName} completed in ${telapsed}ms (${result.length}ch)`)
-          yield { type: 'tool_end', toolName, toolResult: result }
+          const chunkQueue: string[] = []
+          const onChunk = (chunk: string) => { chunkQueue.push(chunk) }
+          const toolPromise = tool.execute(args, onChunk)
+
+          // Flush chunks periodically while tool runs, for real-time streaming
+          let result: string | undefined
+          while (true) {
+            const raced = await Promise.race([
+              toolPromise,
+              new Promise<void>((resolve) => setTimeout(resolve, 150)),
+            ])
+            if (raced !== undefined) result = raced as string
+
+            while (chunkQueue.length > 0) {
+              const c = chunkQueue.shift()!
+              log.agent(`Tool ${toolName} chunk: ${c.slice(0, 60)}`)
+              yield { type: 'tool_chunk', toolName, content: c }
+            }
+            if (result !== undefined) {
+              const telapsed = Date.now() - t1
+              log.agent(`Tool ${toolName} completed in ${telapsed}ms (${result.length}ch)`)
+              yield { type: 'tool_end', toolName, toolResult: result }
+              break
+            }
+          }
 
           lastToolResult = result
 

@@ -19,8 +19,23 @@ export interface Session {
   updatedAt: string
 }
 
+export interface BackgroundTask {
+  id: string
+  sessionId: string
+  name: string
+  schedule: string
+  toolName: string
+  toolArgs: string
+  enabled: boolean
+  lastRunAt: string | null
+  nextRunAt: string | null
+  lastResult: string | null
+  lastError: string | null
+  createdAt: string
+}
+
 export interface StreamChunk {
-  type: 'text' | 'tool_start' | 'tool_end' | 'tool_error' | 'done' | 'error'
+  type: 'text' | 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error' | 'done' | 'error'
   content?: string
   toolName?: string
   toolArgs?: Record<string, any>

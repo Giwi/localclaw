@@ -6,11 +6,12 @@ import { MarkdownPipe } from './markdown.pipe'
 
 export interface ToolEvent {
   id: string
-  type: 'tool_start' | 'tool_end' | 'tool_error'
+  type: 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error'
   toolName: string
   expanded: boolean
   toolArgs?: Record<string, any>
   toolResult?: string
+  content?: string
   error?: string
 }
 
@@ -176,7 +177,22 @@ export class App implements OnInit {
             toolName: chunk.toolName || '',
             toolArgs: chunk.toolArgs,
             expanded: false,
+            content: '',
           }])
+        }
+        if (chunk.type === 'tool_chunk') {
+          this.toolEvents.update((e) => {
+            const copy = [...e]
+            for (let i = copy.length - 1; i >= 0; i--) {
+              const ev = copy[i]
+              if ((ev.type === 'tool_start' || ev.type === 'tool_chunk') && ev.toolName === chunk.toolName) {
+                copy[i] = { ...ev, type: 'tool_chunk', content: (ev.content || '') + (chunk.content || '') }
+                break
+              }
+            }
+            return copy
+          })
+          this.scrollDown()
         }
         if (chunk.type === 'tool_end') {
           this.toolEvents.update((e) => {

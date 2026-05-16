@@ -130,17 +130,17 @@
           <!-- Tool events -->
           @for (ev of toolEvents(); track ev.id) {
             <div class="message-enter mb-3" style="max-width:100%;">
-              <div class="tool-card" [class.active]="ev.type === 'tool_start'" style="background:var(--bg-tool);color:#e5e7eb;border-color:rgba(255,255,255,.1);">
-                @if (ev.type === 'tool_start') {
+              <div class="tool-card" [class.active]="ev.type === 'tool_start' || ev.type === 'tool_chunk'" style="background:var(--bg-tool);color:#e5e7eb;border-color:rgba(255,255,255,.1);">
+                @if (ev.type === 'tool_start' || ev.type === 'tool_chunk') {
                   <div class="tool-card-header" (click)="toggleToolEvent(ev.id)" style="cursor:pointer;">
                     <span style="width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;display:inline-block;"></span>
                     <span style="color:var(--accent);font-weight:600;">{{ ev.toolName }}</span>
                     <span style="color:var(--text-sidebar-muted);margin-left:auto;font-size:11px;">running...</span>
                     <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'"><i class="bi bi-chevron-right"></i></span>
                   </div>
-                  @if (ev.expanded && hasKeys(ev.toolArgs)) {
+                  @if (ev.expanded) {
                     <div class="tool-card-body" style="color:#9ca3af;border-color:rgba(255,255,255,.08);">
-                      {{ ev.toolArgs | json }}
+                      {{ ev.content || (ev.toolArgs | json) }}
                     </div>
                   }
                 }
