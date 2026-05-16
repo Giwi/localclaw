@@ -11,6 +11,8 @@ import { runBashTool } from './builtin/run-bash.js'
 import { opencodeTaskTool } from './builtin/opencode-task.js'
 import { webFetchTool } from './builtin/web-fetch.js'
 import { generateImageTool } from './builtin/generate-image.js'
+import { sendEmailTool } from './builtin/send-email.js'
+import { sendTelegramTool } from './builtin/send-telegram.js'
 import { wrapCommand, isSandboxAvailable } from './sandbox.js'
 
 export class ToolRegistry {
@@ -32,6 +34,8 @@ export class ToolRegistry {
       webFetchTool,
       opencodeTaskTool,
       generateImageTool,
+      sendEmailTool,
+      sendTelegramTool,
       this.createToolDefinition,
     ]) {
       this.tools.set(tool.definition.name, tool)
@@ -134,6 +138,10 @@ export class ToolRegistry {
 
       return `Tool "${name}" created and registered successfully! You can now use it by calling the function tool_${name} in your responses.`
     },
+  }
+
+  register(name: string, tool: ToolModule): void {
+    this.tools.set(name, tool)
   }
 
   list(): ToolDefinition[] {

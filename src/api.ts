@@ -8,6 +8,11 @@ import {
   addMessage,
   deleteSession,
   updateSessionName,
+  createBackgroundTask,
+  listBackgroundTasks,
+  getBackgroundTask,
+  updateBackgroundTask,
+  deleteBackgroundTask,
 } from './db.js'
 import { Agent } from './agent.js'
 import { agentEventToChunk } from './types.js'
@@ -72,6 +77,30 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
   router.get('/sessions/:id/messages', (req: Request, res: Response) => {
     const messages = getMessages(db, req.params.id)
     res.json(messages)
+  })
+
+  router.get('/background-tasks', (req: Request, res: Response) => {
+    const sessionId = req.query.session_id as string | undefined
+    const tasks = listBackgroundTasks(db, sessionId)
+    res.json(tasks)
+  })
+
+  router.get('/background-tasks/:id', (req: Request, res: Response) => {
+    const task = getBackgroundTask(db, req.params.id)
+    if (!task) { res.status(404).json({ error: 'Background task not found' }); return }
+    res.json(task)
+  })
+
+  router.delete('/background-tasks/:id', (req: Request, res: Response) => {
+    deleteBackgroundTask(db, req.params.id)
+    res.json({ ok: true })
+  })
+
+  router.patch('/background-tasks/:id', (req: Request, res: Response) => {
+    const { enabled } = req.body || {}
+    updateBackgroundTask(db, req.params.id, { enabled: !!enabled })
+    const task = getBackgroundTask(db, req.params.id)
+    res.json(task)
   })
 
   router.post('/sessions/:id/chat', async (req: Request, res: Response) => {

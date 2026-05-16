@@ -4,6 +4,8 @@ import path from 'path'
 import { openDb } from './db.js'
 import { createRouter } from './api.js'
 import { Agent } from './agent.js'
+import { BackgroundScheduler } from './scheduler.js'
+import { createScheduleTool } from './tools/builtin/schedule-task.js'
 import chalk from 'chalk'
 import { log } from './log.js'
 
@@ -16,6 +18,13 @@ fs.mkdirSync(path.join(DATA_DIR, 'downloads'), { recursive: true })
 
 const db = openDb(DATA_DIR)
 const agent = new Agent(DATA_DIR, db)
+
+// Register the schedule_task tool and start background scheduler
+const registry = agent.getToolRegistry()
+const scheduler = new BackgroundScheduler(db, registry)
+registry.register('schedule_task', createScheduleTool(db))
+scheduler.start()
+
 const app = express()
 
 app.use(cors())

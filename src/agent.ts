@@ -51,6 +51,9 @@ Available tools:
 - opencode_task(task) — delegate complex multi-step coding tasks to the coding agent
 - create_tool(name, description, language, code, parameters) — create a new reusable tool on the fly (supports python, javascript, bash)
 - generate_image(prompt, model, size) — generate an image using Ollama (models: flux, sd, stable-diffusion)
+- schedule_task(action, name, schedule, tool, args) — schedule a background task (action: "schedule"|"unschedule"|"list"). Use for recurring tasks like "check news every morning"
+- send_email(to, subject, body) — send an email via Mailgun. Use with schedule_task for recurring email delivery
+- send_telegram(action, chat_id, text) — send a Telegram message or get chat_id. Use with schedule_task for recurring notifications
 
 GUIDELINES:
 - Search the web when you need information, look up documentation, or find solutions
@@ -71,6 +74,10 @@ export class Agent {
 
   getTools() {
     return this.toolRegistry.list()
+  }
+
+  getToolRegistry(): ToolRegistry {
+    return this.toolRegistry
   }
 
   private modelId(raw: string): string {
@@ -269,7 +276,8 @@ export class Agent {
           const t1 = Date.now()
           const chunkQueue: string[] = []
           const onChunk = (chunk: string) => { chunkQueue.push(chunk) }
-          const toolPromise = tool.execute(args, onChunk)
+          const toolArgs = sessionId ? { ...args, _sessionId: sessionId } : args
+          const toolPromise = tool.execute(toolArgs, onChunk)
 
           // Flush chunks periodically while tool runs, for real-time streaming
           let result: string | undefined

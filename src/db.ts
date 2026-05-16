@@ -143,6 +143,75 @@ export function searchMemories(db: BetterSqlite3.Database, sessionId: string, qu
   return scored.slice(0, limit)
 }
 
+export function createBackgroundTask(
+  db: BetterSqlite3.Database,
+  task: Omit<BackgroundTask, 'id' | 'createdAt' | 'lastRunAt' | 'lastResult' | 'lastError'>
+): BackgroundTask {
+  const id = crypto.randomUUID()
+  const createdAt = new Date().toISOString()
+  db.prepare(
+    `INSERT INTO background_tasks (id, session_id, name, schedule, tool_name, tool_args, enabled, next_run_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, task.sessionId, task.name, task.schedule, task.toolName, task.toolArgs, task.enabled ? 1 : 0, task.nextRunAt || null, createdAt)
+  return { ...task, id, createdAt, lastRunAt: null, lastResult: null, lastError: null }
+}
+
+export function listBackgroundTasks(db: BetterSqlite3.Database, sessionId?: string): BackgroundTask[] {
+  let rows: any[]
+  if (sessionId) {
+    rows = db.prepare('SELECT * FROM background_tasks WHERE session_id = ? ORDER BY created_at DESC').all(sessionId)
+  } else {
+    rows = db.prepare('SELECT * FROM background_tasks ORDER BY created_at DESC').all()
+  }
+  return rows.map(mapBackgroundTask)
+}
+
+export function getBackgroundTask(db: BetterSqlite3.Database, id: string): BackgroundTask | null {
+  const row = db.prepare('SELECT * FROM background_tasks WHERE id = ?').get(id)
+  return row ? mapBackgroundTask(row as any) : null
+}
+
+export function updateBackgroundTask(db: BetterSqlite3.Database, id: string, updates: Partial<Pick<BackgroundTask, 'lastRunAt' | 'lastResult' | 'lastError' | 'nextRunAt' | 'enabled'>>): void {
+  const sets: string[] = []
+  const vals: any[] = []
+  if (updates.lastRunAt !== undefined) { sets.push('last_run_at = ?'); vals.push(updates.lastRunAt) }
+  if (updates.lastResult !== undefined) { sets.push('last_result = ?'); vals.push(updates.lastResult) }
+  if (updates.lastError !== undefined) { sets.push('last_error = ?'); vals.push(updates.lastError) }
+  if (updates.nextRunAt !== undefined) { sets.push('next_run_at = ?'); vals.push(updates.nextRunAt) }
+  if (updates.enabled !== undefined) { sets.push('enabled = ?'); vals.push(updates.enabled ? 1 : 0) }
+  if (sets.length === 0) return
+  vals.push(id)
+  db.prepare(`UPDATE background_tasks SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+}
+
+export function deleteBackgroundTask(db: BetterSqlite3.Database, id: string): void {
+  db.prepare('DELETE FROM background_tasks WHERE id = ?').run(id)
+}
+
+export function getDueTasks(db: BetterSqlite3.Database): BackgroundTask[] {
+  const rows = db.prepare(
+    "SELECT * FROM background_tasks WHERE enabled = 1 AND (next_run_at IS NULL OR next_run_at <= datetime('now'))"
+  ).all()
+  return rows.map(mapBackgroundTask)
+}
+
+function mapBackgroundTask(row: any): BackgroundTask {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    name: row.name,
+    schedule: row.schedule,
+    toolName: row.tool_name,
+    toolArgs: row.tool_args,
+    enabled: !!row.enabled,
+    lastRunAt: row.last_run_at,
+    nextRunAt: row.next_run_at,
+    lastResult: row.last_result,
+    lastError: row.last_error,
+    createdAt: row.created_at,
+  }
+}
+
 function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0, na = 0, nb = 0
   for (let i = 0; i < a.length; i++) {
