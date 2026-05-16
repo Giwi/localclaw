@@ -2,6 +2,7 @@ import type { ToolModule } from '../types.js'
 import { log } from '../../log.js'
 
 const BOT_TOKEN = process.env.LOCALCLAW_TELEGRAM_BOT_TOKEN
+const DEFAULT_CHAT_ID = process.env.LOCALCLAW_TELEGRAM_CHAT_ID || ''
 const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`
 
 export const sendTelegramTool: ToolModule = {
@@ -72,11 +73,11 @@ Alternatively, if you already know your chat_id, you can use it directly in send
     }
 
     if (action === 'send') {
-      const chatId = (args.chat_id || '').trim()
+      const chatId = (args.chat_id || DEFAULT_CHAT_ID || '').trim()
       const text = (args.text || '').trim()
       const parseMode = args.parse_mode as string || ''
 
-      if (!chatId) return 'Please provide a "chat_id" (use action=get_chat_id first).'
+      if (!chatId) return 'Please provide a "chat_id" (use action=get_chat_id first, or set LOCALCLAW_TELEGRAM_CHAT_ID in .env).'
       if (!text) return 'Please provide a "text" message to send.'
 
       onChunk?.(`Sending Telegram message to ${chatId}...`)
