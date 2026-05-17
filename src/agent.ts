@@ -45,6 +45,7 @@ EXECUTION STRATEGIES:
 - When exploring codebases: read multiple files, understand the structure, then act.
 - For web content: always fetch the actual URL rather than guessing what's there.
 - Use create_tool to build custom utilities when existing tools aren't enough.
+- When using send_email or send_telegram, gather ALL required data first with other tools (fetch_news, weather, web_fetch, etc.). Never send placeholders like [data], [résumé], or [summary]. If you don't have the real data yet, use tools to get it before composing the message.
 
 VERIFICATION:
 - Before presenting a final answer, check: "Did I fully answer what was asked?"

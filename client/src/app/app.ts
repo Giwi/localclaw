@@ -35,6 +35,7 @@ export class App implements OnInit, OnDestroy {
   editingMsg = signal<string | null>(null)
 
   private chatSubscription: Subscription | null = null
+  private loadingTimeout: ReturnType<typeof setTimeout> | null = null
 
   chatContainer = viewChild<ElementRef>('chatContainer')
 
@@ -51,6 +52,7 @@ export class App implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.chatSubscription?.unsubscribe()
+    if (this.loadingTimeout) clearTimeout(this.loadingTimeout)
   }
 
   toggleSidebar() {
@@ -162,6 +164,7 @@ export class App implements OnInit, OnDestroy {
   stopGeneration() {
     this.api.cancelChat()
     this.loading.set(false)
+    if (this.loadingTimeout) { clearTimeout(this.loadingTimeout); this.loadingTimeout = null }
   }
 
   send() {
@@ -194,6 +197,20 @@ export class App implements OnInit, OnDestroy {
 
     this.loading.set(true)
     this.scrollDown()
+    if (this.loadingTimeout) clearTimeout(this.loadingTimeout)
+    this.loadingTimeout = setTimeout(() => {
+      this.loading.set(false)
+      this.chatSubscription = null
+      this.api.cancelChat()
+    }, 120_000)
+
+    const done = () => {
+      this.loading.set(false)
+      this.loadSessions()
+      this.chatSubscription = null
+      this.api.cancelChat()
+      if (this.loadingTimeout) { clearTimeout(this.loadingTimeout); this.loadingTimeout = null }
+    }
 
     let assistantContent = ''
     this.chatSubscription = this.api.streamChat(session.id, text).subscribe({
@@ -262,10 +279,10 @@ export class App implements OnInit, OnDestroy {
             return copy
           })
         }
-        if (chunk.type === 'done') { this.loading.set(false); this.loadSessions(); this.chatSubscription = null; this.api.cancelChat() }
-        if (chunk.type === 'error') { console.error(chunk.error); this.loading.set(false); this.chatSubscription = null; this.api.cancelChat() }
+        if (chunk.type === 'done') { done() }
+        if (chunk.type === 'error') { console.error(chunk.error); done() }
       },
-      error: () => { this.loading.set(false); this.chatSubscription = null; this.api.cancelChat() },
+      error: () => { done() },
     })
   }
 
