@@ -4,8 +4,9 @@ node_modules/
 dist/
 ~/
 *.md
+.gitignore
+AGENTS.md
 client/node_modules/
-client/src/
-client/angular.json
-client/tsconfig*
-client/proxy.conf.json
+client/dist/
+client/proxy.conf.js
+LICENCE
