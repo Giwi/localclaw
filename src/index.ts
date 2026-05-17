@@ -2,12 +2,15 @@ import express from 'express'
 import cors from 'cors'
 import path from 'path'
 import fs from 'fs'
+import http from 'http'
 import { openDb } from './db.js'
 import { createRouter } from './api.js'
+import { createWebSocket } from './ws.js'
 import { Agent } from './agent.js'
 import { BackgroundScheduler } from './scheduler.js'
 import { createScheduleTool } from './tools/builtin/schedule-task.js'
 import { createSearchKnowledgeTool } from './tools/builtin/search-knowledge.js'
+import { loadPlugins } from './plugins.js'
 import chalk from 'chalk'
 import { log } from './log.js'
 
@@ -28,10 +31,17 @@ registry.register('search_knowledge', createSearchKnowledgeTool(db))
 scheduler.start()
 
 const app = express()
+const server = http.createServer(app)
 
 app.use(cors())
 app.use(express.json())
 app.use('/api', createRouter(db, agent))
+
+// WebSocket for real-time chat
+createWebSocket(server, db, agent)
+
+// Load plugins
+await loadPlugins(registry, DATA_DIR)
 
 app.use('/downloads', express.static(path.join(DATA_DIR, 'downloads')))
 app.use(express.static(CLIENT_DIR))
@@ -39,7 +49,7 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(CLIENT_DIR, 'index.html'))
 })
 
-const server = app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(chalk.cyan(`\n  ╔══════════════════════════════════════════╗`))
   console.log(chalk.cyan(`  ║          localclaw v0.1.0               ║`))
   console.log(chalk.cyan(`  ║   autonomous agent · ollama + opencode  ║`))

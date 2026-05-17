@@ -6,6 +6,26 @@ import type { Message, Session, BackgroundTask } from './types.js'
 import { embed } from './embeddings.js'
 import { log } from './log.js'
 
+// Simple in-memory embedding cache: content → number[]
+const embedCache = new Map<string, number[]>()
+
+export function clearEmbedCache() {
+  embedCache.clear()
+}
+
+function parseEmbedding(raw: string | null): number[] | null {
+  if (!raw) return null
+  const cached = embedCache.get(raw)
+  if (cached) return cached
+  try {
+    const parsed = JSON.parse(raw) as number[]
+    if (parsed.length > 0) embedCache.set(raw, parsed)
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 export function openDb(dataDir: string): BetterSqlite3.Database {
   fs.mkdirSync(dataDir, { recursive: true })
   const dbPath = path.join(dataDir, 'localclaw.db')
@@ -68,9 +88,15 @@ export function openDb(dataDir: string): BetterSqlite3.Database {
     CREATE INDEX IF NOT EXISTS idx_bg_tasks_next ON background_tasks(enabled, next_run_at);
     CREATE INDEX IF NOT EXISTS idx_knowledge_docs ON knowledge_documents(created_at);
     CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_doc ON knowledge_chunks(document_id);
+    CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(content, session_id UNINDEXED);
+    CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(content, document_id UNINDEXED);
   `)
 
   log.debug('Database schema ready')
+
+  // Backfill any embeddings computed externally
+  backfillMissingEmbeddings(db)
+
   return db
 }
 
@@ -146,6 +172,13 @@ export function storeMemory(db: BetterSqlite3.Database, sessionId: string, conte
   db.prepare(
     'INSERT INTO memory_entries (id, session_id, content, embedding, created_at) VALUES (?, ?, ?, ?, ?)'
   ).run(id, sessionId, content, embedding ? JSON.stringify(embedding) : null, new Date().toISOString())
+  try {
+    db.prepare('INSERT INTO memory_fts (rowid, content, session_id) VALUES (?, ?, ?)').run(
+      db.prepare('SELECT rowid FROM memory_entries WHERE id = ?').get(id) as any,
+      content,
+      sessionId,
+    )
+  } catch { /* FTS may not be available */ }
 }
 
 export function searchMemories(db: BetterSqlite3.Database, sessionId: string, queryEmbedding: number[], limit = 5): { content: string; score: number }[] {
@@ -155,11 +188,11 @@ export function searchMemories(db: BetterSqlite3.Database, sessionId: string, qu
 
   const scored: { content: string; score: number }[] = []
   for (const row of rows) {
-    try {
-      const emb = JSON.parse(row.embedding) as number[]
+    const emb = parseEmbedding(row.embedding)
+    if (emb) {
       const score = cosineSimilarity(queryEmbedding, emb)
       scored.push({ content: row.content, score })
-    } catch { /* skip */ }
+    }
   }
 
   scored.sort((a, b) => b.score - a.score)
@@ -246,6 +279,13 @@ export function addKnowledgeChunk(db: BetterSqlite3.Database, documentId: string
   db.prepare(
     'INSERT INTO knowledge_chunks (id, document_id, content, embedding) VALUES (?, ?, ?, ?)'
   ).run(id, documentId, content, embedding ? JSON.stringify(embedding) : null)
+  try {
+    db.prepare('INSERT INTO knowledge_fts (rowid, content, document_id) VALUES (?, ?, ?)').run(
+      db.prepare('SELECT rowid FROM knowledge_chunks WHERE id = ?').get(id) as any,
+      content,
+      documentId,
+    )
+  } catch { /* FTS may not be available */ }
 }
 
 export function listKnowledgeDocuments(db: BetterSqlite3.Database): { id: string; name: string; type: string; size: number; createdAt: string }[] {
@@ -269,11 +309,11 @@ export function searchKnowledge(db: BetterSqlite3.Database, queryEmbedding: numb
 
   const scored: { content: string; score: number; documentName: string }[] = []
   for (const row of rows) {
-    try {
-      const emb = JSON.parse(row.embedding) as number[]
+    const emb = parseEmbedding(row.embedding)
+    if (emb) {
       const score = cosineSimilarity(queryEmbedding, emb)
       if (score > 0.1) scored.push({ content: row.content, score, documentName: row.document_name })
-    } catch { /* skip */ }
+    }
   }
 
   scored.sort((a, b) => b.score - a.score)
@@ -289,4 +329,27 @@ function cosineSimilarity(a: number[], b: number[]): number {
   }
   const denom = Math.sqrt(na) * Math.sqrt(nb)
   return denom === 0 ? 0 : dot / denom
+}
+
+export function backfillMissingEmbeddings(db: BetterSqlite3.Database) {
+  const tables = [
+    { table: 'memory_entries', idField: 'id', contentField: 'content' },
+    { table: 'knowledge_chunks', idField: 'id', contentField: 'content' },
+  ]
+
+  for (const { table, idField, contentField } of tables) {
+    const rows = db.prepare(
+      `SELECT ${idField} as id, ${contentField} as content FROM ${table} WHERE embedding IS NULL LIMIT 50`
+    ).all() as { id: string; content: string }[]
+
+    for (const row of rows) {
+      embed(row.content.slice(0, 1000)).then((emb) => {
+        if (emb.length > 0) {
+          db.prepare(`UPDATE ${table} SET embedding = ? WHERE ${idField} = ?`).run(JSON.stringify(emb), row.id)
+        }
+      }).catch(() => {})
+    }
+
+    if (rows.length > 0) log.debug(`Backfilling ${rows.length} embeddings for ${table}`)
+  }
 }

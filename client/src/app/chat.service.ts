@@ -33,11 +33,18 @@ export class ChatService {
   private http = inject(HttpClient)
   private zone = inject(NgZone)
 
-  private abortController: AbortController | null = null
+  private ws: WebSocket | null = null
+  private wsSubject: Subject<StreamChunk> | null = null
 
   cancelChat() {
-    this.abortController?.abort()
-    this.abortController = null
+    if (this.ws) {
+      this.ws.close()
+      this.ws = null
+    }
+    if (this.wsSubject) {
+      this.wsSubject.complete()
+      this.wsSubject = null
+    }
   }
 
   getSessions() {
@@ -75,58 +82,47 @@ export class ChatService {
   }
 
   streamChat(sessionId: string, message: string): Observable<StreamChunk> {
+    this.cancelChat()
+
     const subject = new Subject<StreamChunk>()
+    this.wsSubject = subject
 
-    this.abortController = new AbortController()
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${proto}//${location.host}/ws`
 
-    fetch(`/api/sessions/${sessionId}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-      signal: this.abortController.signal,
-    }).then(async (res) => {
-      const reader = res.body?.getReader()
-      if (!reader) {
-        this.zone.run(() => subject.error(new Error('No response body')))
-        return
-      }
+    const ws = new WebSocket(wsUrl)
+    this.ws = ws
 
-      const decoder = new TextDecoder()
-      let buffer = ''
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'chat', sessionId, message }))
+    }
 
+    ws.onmessage = (event) => {
       try {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
-
-          for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed || !trimmed.startsWith('data: ')) continue
-            try {
-              const data: StreamChunk = JSON.parse(trimmed.slice(6))
-              this.zone.run(() => subject.next(data))
-            } catch { /* skip */ }
-          }
-        }
-        this.zone.run(() => subject.complete())
-      } catch (err: any) {
-        if (err?.name === 'AbortError') {
+        const data: StreamChunk = JSON.parse(event.data)
+        this.zone.run(() => subject.next(data))
+        if (data.type === 'done' || data.type === 'error') {
+          ws.close()
+          this.ws = null
           this.zone.run(() => subject.complete())
-        } else {
-          this.zone.run(() => subject.error(err))
+          this.wsSubject = null
         }
-      }
-    }).catch((err: any) => {
-      if (err?.name === 'AbortError') {
+      } catch { /* skip */ }
+    }
+
+    ws.onerror = () => {
+      this.zone.run(() => subject.error(new Error('WebSocket error')))
+      this.ws = null
+      this.wsSubject = null
+    }
+
+    ws.onclose = () => {
+      if (this.wsSubject === subject) {
         this.zone.run(() => subject.complete())
-      } else {
-        this.zone.run(() => subject.error(err))
+        this.wsSubject = null
       }
-    })
+      this.ws = null
+    }
 
     return subject.asObservable()
   }

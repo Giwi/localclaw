@@ -41,30 +41,30 @@
 
 /* ── Dark ── */
 [data-theme="dark"] {
-  --bg-primary: #070b14;
-  --bg-secondary: #0c1220;
+  --bg-primary: #0f1420;
+  --bg-secondary: #161c2e;
   --bg-sidebar: rgba(6, 10, 22, .95);
-  --bg-sidebar-hover: rgba(255, 255, 255, .04);
+  --bg-sidebar-hover: rgba(255, 255, 255, .05);
   --bg-sidebar-active: rgba(0, 200, 255, .1);
   --bg-bubble-user: var(--accent);
-  --bg-bubble-assistant: #0c1220;
+  --bg-bubble-assistant: #1a2338;
   --bg-tool: rgba(6, 10, 22, .95);
-  --bg-input: #0c1220;
-  --bg-header: rgba(10, 16, 28, .92);
-  --text-primary: #dce3ed;
-  --text-secondary: #6a7a92;
-  --text-sidebar: #dce3ed;
-  --text-sidebar-muted: #5a6a82;
+  --bg-input: #161c2e;
+  --bg-header: rgba(12, 18, 30, .95);
+  --text-primary: #e8edf5;
+  --text-secondary: #8899b8;
+  --text-sidebar: #e8edf5;
+  --text-sidebar-muted: #6a7d9a;
   --text-bubble-user: #ffffff;
-  --text-bubble-assistant: #dce3ed;
-  --border-color: rgba(255, 255, 255, .06);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .4);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, .5);
-  --shadow-lg: 0 10px 40px rgba(0, 0, 0, .6);
+  --text-bubble-assistant: #e8edf5;
+  --border-color: rgba(255, 255, 255, .08);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .5);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, .6);
+  --shadow-lg: 0 10px 40px rgba(0, 0, 0, .7);
   --glow: 0 0 20px rgba(0, 200, 255, .2);
   --glow-strong: 0 0 40px rgba(0, 200, 255, .3);
-  --glass-bg: rgba(255, 255, 255, .03);
-  --glass-border: rgba(255, 255, 255, .05);
+  --glass-bg: rgba(255, 255, 255, .04);
+  --glass-border: rgba(255, 255, 255, .06);
 }
 html, body { height: 100%; }
 body {
@@ -177,12 +177,13 @@ body {
   padding: 10px 14px;
   font-size: 12px;
   font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
-  line-height: 1.5;
+  line-height: 1.6;
   max-height: 300px;
   overflow: auto;
   border-top: 1px solid var(--glass-border);
   white-space: pre-wrap;
   word-break: break-all;
+  color: #c8d0dc;
 }
 
 /* ── Input glow ── */
@@ -328,10 +329,12 @@ body {
   font-size: 13px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, .08);
+  background: rgba(0, 0, 0, .07);
+  color: #e74c3c;
 }
 [data-theme="dark"] .message-content code {
-  background: rgba(255, 255, 255, .08);
+  background: rgba(255, 255, 255, .07);
+  color: #fc8f8f;
 }
 .message-content pre {
   margin: 8px 0;

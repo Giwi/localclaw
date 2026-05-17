@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+~/
+~/*
 
 # localclaw runtime data (stored in $HOME/.localclaw, outside the repo)
 
