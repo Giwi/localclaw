@@ -29,7 +29,7 @@ interface OllamaResponseMessage {
   }>
 }
 
-const SYSTEM_PROMPT = `You are localclaw, an autonomous AI agent running on Ollama with tools. You are proactive, curious, and solution-oriented.
+const SYSTEM_PROMPT_HEAD = `You are localclaw, an autonomous AI agent running on Ollama with tools. You are proactive, curious, and solution-oriented.
 
 CORE BEHAVIOR:
 - Be proactive: explore, investigate, and act without waiting for instructions
@@ -44,21 +44,9 @@ SEARCH STRATEGIES:
 - If a search returns irrelevant results, try a different query or fetch the intended URL directly
 
 Available tools:
-- web_fetch(q, mode) — search the web or fetch a URL. Set q="your query" to search, q="https://..." for a specific page, mode="images" for pictures.
-- fetch_news(topic, source) — get the latest news articles on any topic. Supports searches like "technology", "AI", "world news" and sources like reuters, bbc, techcrunch.
-- weather(location, days) — get current weather and forecast for any city. Use for weather checks without web search.
-- browser_automation(url, action) — load a page in a real headless browser. Use for JavaScript-heavy sites that don't render with web_fetch. Supports screenshot mode.
-- search_knowledge(query) — search uploaded documents (PDFs, text files) by meaning. Use to find information the user has uploaded.
-- run_bash(command) — execute any bash command to explore the system, install packages, run scripts, etc.
-- write_file(path, content) — write or create any file
-- read_file(path) — read any file to understand the codebase or system
-- opencode_task(task) — delegate complex multi-step coding tasks to the coding agent
-- create_tool(name, description, language, code, parameters) — create a new reusable tool on the fly (supports python, javascript, bash)
-- generate_image(prompt, model, size) — generate an image using Ollama (models: flux, sd, stable-diffusion)
-- schedule_task(action, name, schedule, tool, args) — schedule a background task (action: "schedule"|"unschedule"|"list"). Use for recurring tasks like "check news every morning"
-- send_email(to, subject, body) — send an email via Mailgun. Use with schedule_task for recurring email delivery
-- send_telegram(action, chat_id, text) — send a Telegram message or get chat_id. Use with schedule_task for recurring notifications
+`
 
+const SYSTEM_PROMPT_TAIL = `
 GUIDELINES:
 - Search the web when you need information, look up documentation, or find solutions
 - Explore the user's filesystem and codebase to understand context before suggesting changes
@@ -99,6 +87,16 @@ export class Agent {
     }))
   }
 
+  private buildToolDescriptions(): string {
+    const tools = this.toolRegistry.list()
+    return tools.map((t) => {
+      const params = t.parameters?.properties
+        ? Object.keys(t.parameters.properties).join(', ')
+        : ''
+      return `- ${t.name}(${params}) — ${t.description}`
+    }).join('\n')
+  }
+
   async *run(
     model: string,
     messages: { role: string; content: string }[],
@@ -108,7 +106,7 @@ export class Agent {
     const tools = this.buildToolDefs()
     let history = [...messages]
 
-    let systemContent = systemPrompt || SYSTEM_PROMPT
+    let systemContent = systemPrompt || SYSTEM_PROMPT_HEAD + this.buildToolDescriptions() + SYSTEM_PROMPT_TAIL
 
     // RAG: retrieve relevant memories and global knowledge for the last user message
     if (sessionId && messages.length > 0) {
@@ -179,7 +177,7 @@ export class Agent {
 
     const FORCE_TOOL_MSG: { role: string; content: string } = {
       role: 'system',
-      content: 'You did NOT call any tool. Call a tool NOW. Use web_fetch, run_bash, opencode_task, create_tool, or generate_image. Do not apologize — just call one.',
+      content: `You did NOT call any tool. Call a tool NOW. Use ${this.toolRegistry.list().filter(t => !['send_email','send_telegram','schedule_task'].includes(t.name)).slice(0, 5).map(t => t.name).join(', ')}, or another tool. Do not apologize — just call one.`,
     }
 
     let apiMessages: any[] = [systemMsg, ...history]
