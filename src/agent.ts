@@ -259,7 +259,6 @@ export class Agent {
         if (forceTool && content.trim()) {
           log.agent('Force-tool response accepted, yielding text')
           yield { type: 'text', content }
-          yield { type: 'done' }
           return
         }
 
@@ -304,7 +303,6 @@ export class Agent {
         } else {
           log.agent('Empty response from model')
         }
-        yield { type: 'done' }
         return
       }
 

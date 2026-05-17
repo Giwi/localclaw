@@ -78,7 +78,6 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
 
           if (session.name === 'New Session' && message.length > 10) {
             const shortName = message.length > 50 ? message.slice(0, 50) + '...' : message
-            const { updateSessionName } = await import('./db.js')
             updateSessionName(db, session.id, shortName)
           }
         } catch (err: any) {
