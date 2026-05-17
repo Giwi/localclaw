@@ -10,17 +10,13 @@ export const sendTelegramTool: ToolModule = {
     name: 'send_telegram',
     description: `Send a message via Telegram bot. Use this to deliver alerts, notifications, or any content to a Telegram user or group.
 
-To find your chat_id:
-1. Start a conversation with @giwi_local_claw_bot on Telegram
-2. Send any message to the bot
-3. Then use this tool with action="get_chat_id"
-4. Use the returned chat_id in future messages`,
+The LOCALCLAW_TELEGRAM_CHAT_ID env var is already configured — just omit chat_id to use it. Only use action=get_chat_id if told the env var is missing.`,
     parameters: {
       type: 'object',
       properties: {
         action: { type: 'string', description: '"send" to send a message, "get_chat_id" to check for recent interactions', enum: ['send', 'get_chat_id'] },
-        chat_id: { type: 'string', description: 'Telegram chat ID (required for action=send). Can be a number or @username.' },
-        text: { type: 'string', description: 'Message text to send (required for action=send). Supports Markdown: *bold*, _italic_, `code`.' },
+        chat_id: { type: 'string', description: 'Optional — defaults to LOCALCLAW_TELEGRAM_CHAT_ID from env. Can be a number or @username.' },
+        text: { type: 'string', description: 'Message text to send (required for action=send). Supports Markdown: *bold*, _italic_, \`code\`.' },
         parse_mode: { type: 'string', description: 'Optional: "Markdown" or "HTML" for formatted messages', enum: ['Markdown', 'HTML'] },
       },
       required: ['action'],
@@ -77,7 +73,7 @@ Alternatively, if you already know your chat_id, you can use it directly in send
       const text = (args.text || '').trim()
       const parseMode = args.parse_mode as string || ''
 
-      if (!chatId) return 'Please provide a "chat_id" (use action=get_chat_id first, or set LOCALCLAW_TELEGRAM_CHAT_ID in .env).'
+      if (!chatId) return 'LOCALCLAW_TELEGRAM_CHAT_ID env var is missing. Set it in .env or pass a chat_id argument.'
       if (!text) return 'Please provide a "text" message to send.'
 
       onChunk?.(`Sending Telegram message to ${chatId}...`)
@@ -101,7 +97,7 @@ Alternatively, if you already know your chat_id, you can use it directly in send
         } else {
           let hint = data.description || 'unknown error'
           if (data.description?.includes('chat not found')) {
-            hint += `\nTip: The user must start a conversation with @giwi_local_claw_bot first, then use action=get_chat_id to get their chat_id.`
+            hint += `\nTip: The bot user must start a conversation with @giwi_local_claw_bot on Telegram first. Then update LOCALCLAW_TELEGRAM_CHAT_ID in .env.`
           }
           return `Failed to send: ${hint}`
         }

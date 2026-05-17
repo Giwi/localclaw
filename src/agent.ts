@@ -46,6 +46,7 @@ EXECUTION STRATEGIES:
 - For web content: always fetch the actual URL rather than guessing what's there.
 - Use create_tool to build custom utilities when existing tools aren't enough.
 - When using send_email or send_telegram, gather ALL required data first with other tools (fetch_news, weather, web_fetch, etc.). Never send placeholders like [data], [résumé], or [summary]. If you don't have the real data yet, use tools to get it before composing the message.
+- send_telegram: the chat_id is already configured in LOCALCLAW_TELEGRAM_CHAT_ID — omit the chat_id argument to use it. Do NOT call get_chat_id unless the send fails with "env var is missing".
 
 VERIFICATION:
 - Before presenting a final answer, check: "Did I fully answer what was asked?"
@@ -197,7 +198,7 @@ export class Agent {
 
     const FORCE_TOOL_MSG: { role: string; content: string } = {
       role: 'system',
-      content: `You did NOT call any tool. Call a tool NOW. Use ${this.toolRegistry.list().filter(t => !['send_email','send_telegram','schedule_task'].includes(t.name)).slice(0, 5).map(t => t.name).join(', ')}, or another tool. Do not apologize — just call one.`,
+      content: `You did NOT call any tool. Call a tool NOW. Use ${this.toolRegistry.list().filter(t => !['send_email','schedule_task'].includes(t.name)).slice(0, 5).map(t => t.name).join(', ')}, or another tool. Do not apologize — just call one.`,
     }
 
     let apiMessages: any[] = [systemMsg, ...history]
@@ -302,7 +303,14 @@ export class Agent {
           log.agent('Yielding text response')
           yield { type: 'text', content }
         } else {
-          log.agent('Empty response from model')
+          if (loop < MAX_TOOL_LOOPS - 1) {
+            log.agent('Empty response from model, re-prompting')
+            apiMessages.push({ role: 'assistant', content: '(no output)' })
+            apiMessages.push(FORCE_TOOL_MSG)
+            forceTool = true
+            continue
+          }
+          log.agent('Empty response from model, giving up')
         }
         return
       }
