@@ -58,6 +58,35 @@ npm run dev
 
 Open http://localhost:4173
 
+## GPU Acceleration
+
+Ollama supports GPU acceleration via CUDA (NVIDIA) or ROCm/Vulkan (AMD). localclaw inherits whatever backend Ollama is configured with.
+
+**AMD GPUs (RX 580, etc.) — Vulkan path (recommended):**
+
+```bash
+# 1. Install Mesa Vulkan drivers (usually pre-installed)
+sudo apt install mesa-vulkan-drivers
+
+# 2. Upgrade Ollama to a Vulkan-capable build
+sudo systemctl stop ollama
+curl -L https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 -o /usr/local/bin/ollama
+sudo chmod +x /usr/local/bin/ollama
+sudo systemctl start ollama
+
+# 3. Set Vulkan environment in Ollama service
+# Add to /etc/systemd/system/ollama.service.d/override.conf:
+# Environment=OLLAMA_VULKAN=1
+```
+
+**Verify GPU is active:**
+```bash
+ollama ps
+# Look for "100% GPU" in the PROCESSOR column
+```
+
+> **Note:** Models must fit in VRAM to run entirely on GPU. With a 4GB RX 580, use quantized models like `qwen2.5:7b-instruct-q3_K_M` (~3.6GB) instead of the full q4_K_M variant (~4.7GB).
+
 ## Configuration
 
 All settings via `.env`:
@@ -78,6 +107,7 @@ All settings via `.env`:
 | `LOCALCLAW_MAILGUN_DOMAIN` | — | Mailgun verified domain |
 | `LOCALCLAW_MAILGUN_FROM` | — | Sender email address |
 | `LOCALCLAW_TELEGRAM_BOT_TOKEN` | — | Telegram bot token for messaging |
+| `LOCALCLAW_TELEGRAM_CHAT_ID` | — | Default Telegram chat ID for notifications |
 
 ## How It Works
 
