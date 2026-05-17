@@ -1,8 +1,10 @@
-export default [
-  {
-    context: ['/api', '/ws'],
+export default {
+  '/api': {
     target: 'http://localhost:4173',
-    secure: false,
+    changeOrigin: true,
+  },
+  '/ws': {
+    target: 'http://localhost:4173',
     ws: true,
   },
-]
+}

@@ -121,7 +121,9 @@ export class ChatService {
         this.zone.run(() => subject.complete())
         this.wsSubject = null
       }
-      this.ws = null
+      if (this.ws === ws) {
+        this.ws = null
+      }
     }
 
     return subject.asObservable()
