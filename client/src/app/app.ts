@@ -1,6 +1,7 @@
-import { Component, OnInit, inject, signal, viewChild, ElementRef } from '@angular/core'
+import { Component, OnInit, inject, signal, viewChild, ElementRef, OnDestroy } from '@angular/core'
 import { FormsModule } from '@angular/forms'
 import { JsonPipe, AsyncPipe } from '@angular/common'
+import { Subscription } from 'rxjs'
 import { ChatService, type Session, type Message } from './chat.service'
 import { MarkdownPipe } from './markdown.pipe'
 
@@ -20,7 +21,7 @@ export interface ToolEvent {
   imports: [FormsModule, JsonPipe, AsyncPipe, MarkdownPipe],
   templateUrl: './app.html',
 })
-export class App implements OnInit {
+export class App implements OnInit, OnDestroy {
   private api = inject(ChatService)
 
   sessions = signal<Session[]>([])
@@ -31,6 +32,8 @@ export class App implements OnInit {
   loading = signal(false)
   currentTheme = signal('light')
   sidebarOpen = signal(true)
+
+  private chatSubscription: Subscription | null = null
 
   chatContainer = viewChild<ElementRef>('chatContainer')
 
@@ -43,6 +46,10 @@ export class App implements OnInit {
     }
     this.applyTheme()
     this.loadSessions()
+  }
+
+  ngOnDestroy() {
+    this.chatSubscription?.unsubscribe()
   }
 
   toggleSidebar() {
@@ -74,6 +81,8 @@ export class App implements OnInit {
   }
 
   selectSession(session: Session) {
+    this.chatSubscription?.unsubscribe()
+    this.chatSubscription = null
     this.currentSession.set(session)
     this.toolEvents.set([])
     this.api.getMessages(session.id).subscribe((msgs) => {
@@ -146,9 +155,12 @@ export class App implements OnInit {
     this.loading.set(true)
     this.scrollDown()
 
+    this.chatSubscription?.unsubscribe()
+
     let assistantContent = ''
-    this.api.streamChat(session.id, text).subscribe({
+    this.chatSubscription = this.api.streamChat(session.id, text).subscribe({
       next: (chunk) => {
+        if (this.currentSession()?.id !== session.id) return
         if (chunk.type === 'text' && chunk.content) {
           assistantContent += chunk.content
           const lastMsg = this.messages()[this.messages().length - 1]
@@ -212,10 +224,10 @@ export class App implements OnInit {
             return copy
           })
         }
-        if (chunk.type === 'done') { this.loading.set(false); this.loadSessions() }
-        if (chunk.type === 'error') { console.error(chunk.error); this.loading.set(false) }
+        if (chunk.type === 'done') { this.loading.set(false); this.loadSessions(); this.chatSubscription = null }
+        if (chunk.type === 'error') { console.error(chunk.error); this.loading.set(false); this.chatSubscription = null }
       },
-      error: () => { this.loading.set(false) },
+      error: () => { this.loading.set(false); this.chatSubscription = null },
     })
   }
 
