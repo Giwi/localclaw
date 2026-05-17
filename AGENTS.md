@@ -4,7 +4,7 @@
 
 ```bash
 npm run dev          # dev server (tsx --env-file=.env)
-npx tsc --noEmit     # typecheck only
+npm run typecheck    # typecheck only (tsc --noEmit)
 npm run build:server # tsc → dist/
 ```
 

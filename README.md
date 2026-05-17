@@ -40,7 +40,7 @@ localclaw/
 
 ## Quick Start
 
-**Prerequisites:** Node.js 22+, Ollama with a model pulled (e.g. `qwen2.5:7b`), Docker (optional, for SearXNG).
+**Prerequisites:** Node.js 22+, Ollama with a model pulled (e.g. `qwen2.5:7b-instruct-q3_K_M`), Docker (optional, for SearXNG).
 
 ```bash
 # 1. Start SearXNG (optional — falls back to DuckDuckGo)
@@ -96,7 +96,7 @@ All settings via `.env`:
 | `LOCALCLAW_PORT` | `4173` | Server port |
 | `LOCALCLAW_DATA_DIR` | `~/.localclaw` | Data directory (sessions, tools, downloads) |
 | `LOCALCLAW_OLLAMA_URL` | `http://localhost:11434` | Ollama API URL |
-| `LOCALCLAW_MODEL` | `ollama/qwen2.5:7b` | Default model |
+| `LOCALCLAW_MODEL` | `ollama/qwen2.5:7b-instruct-q3_K_M` | Default model |
 | `LOCALCLAW_SEARXNG_URL` | `http://localhost:8888` | SearXNG search URL (empty = DuckDuckGo fallback) |
 | `LOCALCLAW_OPENCODE_BIN` | `opencode` | OpenCode binary path |
 | `LOCALCLAW_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
@@ -128,6 +128,7 @@ All settings via `.env`:
 - **opencode_task** — Delegate complex multi-step coding tasks to OpenCode.
 - **send_email** — Send email via Mailgun API. Supports plain text and HTML. Combine with background tasks for recurring delivery.
 - **send_telegram** — Send Telegram messages via bot. Includes a `get_chat_id` helper to discover chat IDs. Combine with background tasks for recurring notifications.
+- **browser_automation** — Control a headless Chromium browser (via Puppeteer). Navigate URLs, click elements, extract page content, take screenshots, and fill forms.
 - **schedule_task** — Schedule, unschedule, and list background tasks. Supports `every Xm`, `every Xh`, `daily at HH:MM`, `daily`, `weekly` schedules.
 - **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash. Execution respects sandbox mode.
 
