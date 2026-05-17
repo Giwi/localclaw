@@ -2,25 +2,40 @@ import fs from 'fs'
 import path from 'path'
 import type { ToolModule } from '../types.js'
 
+const ALLOWED_PREFIXES = [
+  process.cwd(),
+  process.env.LOCALCLAW_DATA_DIR || path.join(process.env.HOME || '/tmp', '.localclaw'),
+].map((p) => path.resolve(p))
+
+function isPathSafe(target: string): boolean {
+  const resolved = path.resolve(target)
+  return ALLOWED_PREFIXES.some((prefix) => resolved.startsWith(prefix))
+}
+
 export const writeFileTool: ToolModule = {
   definition: {
     name: 'write_file',
-    description: 'Write content to a file on the filesystem. Creates parent directories if needed.',
+    description: 'Write content to a file on the filesystem. Creates parent directories if needed. (Restricted to project and data directories)',
     parameters: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Absolute or relative path to the file' },
+        path: { type: 'string', description: 'Path to the file (relative or absolute, within project or data dir)' },
         content: { type: 'string', description: 'The content to write' },
       },
       required: ['path', 'content'],
     },
   },
   execute: async (args) => {
-    const { path: filePath, content } = args
+    const filePath = args.path as string
+    const content = args.content as string
+    if (!isPathSafe(filePath)) {
+      return `Error: Path traversal denied — "${filePath}" resolves outside allowed directories`
+    }
     try {
-      fs.mkdirSync(path.dirname(filePath as string), { recursive: true })
-      fs.writeFileSync(filePath as string, content as string, 'utf-8')
-      return `File written: ${filePath} (${(content as string).length} bytes)`
+      const resolved = path.resolve(filePath)
+      fs.mkdirSync(path.dirname(resolved), { recursive: true })
+      fs.writeFileSync(resolved, content, 'utf-8')
+      return `File written: ${filePath} (${content.length} bytes)`
     } catch (err: any) {
       return `Error writing file: ${err.message}`
     }

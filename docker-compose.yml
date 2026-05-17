@@ -1,4 +1,22 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: localclaw-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
   searxng:
     image: searxng/searxng:latest
     container_name: localclaw-searxng
@@ -16,3 +34,28 @@ services:
       - SETGID
       - SETUID
     restart: unless-stopped
+
+  localclaw:
+    build: .
+    container_name: localclaw
+    ports:
+      - "${LOCALCLAW_PORT:-4173}:4173"
+    environment:
+      - LOCALCLAW_OLLAMA_URL=http://ollama:11434
+      - LOCALCLAW_SEARXNG_URL=http://searxng:8080
+      - LOCALCLAW_MODEL=${LOCALCLAW_MODEL:-ollama/qwen2.5:7b-instruct-q3_K_M}
+      - LOCALCLAW_EMBEDDING_MODEL=${LOCALCLAW_EMBEDDING_MODEL:-nomic-embed-text}
+      - LOCALCLAW_DATA_DIR=/data
+      - LOCALCLAW_PORT=4173
+      - LOCALCLAW_OPENCODE_BIN=
+      - LOCALCLAW_SANDBOX_ENABLED=false
+    volumes:
+      - localclaw_data:/data
+    depends_on:
+      - ollama
+      - searxng
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+  localclaw_data:

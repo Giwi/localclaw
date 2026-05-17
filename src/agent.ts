@@ -295,6 +295,7 @@ export class Agent {
 
       for (const tc of toolCalls) {
         const toolName = tc.function.name
+        const toolRunId = crypto.randomUUID()
         let args: Record<string, any> = {}
         if (typeof tc.function.arguments === 'object' && tc.function.arguments !== null) {
           args = tc.function.arguments as Record<string, any>
@@ -309,12 +310,12 @@ export class Agent {
         const tool = this.toolRegistry.get(toolName)
         if (!tool) {
           log.warn(`Tool "${toolName}" not found in registry`)
-          yield { type: 'tool_error', toolName, error: `Tool "${toolName}" not found` }
+          yield { type: 'tool_error', toolName, toolRunId, error: `Tool "${toolName}" not found` }
           continue
         }
 
         log.agent(`Calling tool ${toolName}`)
-        yield { type: 'tool_start', toolName, toolArgs: args }
+        yield { type: 'tool_start', toolName, toolRunId, toolArgs: args }
 
         try {
           const t1 = Date.now()
@@ -335,12 +336,12 @@ export class Agent {
             while (chunkQueue.length > 0) {
               const c = chunkQueue.shift()!
               log.agent(`Tool ${toolName} chunk: ${c.slice(0, 60)}`)
-              yield { type: 'tool_chunk', toolName, content: c }
+              yield { type: 'tool_chunk', toolName, toolRunId, content: c }
             }
             if (result !== undefined) {
               const telapsed = Date.now() - t1
               log.agent(`Tool ${toolName} completed in ${telapsed}ms (${result.length}ch)`)
-              yield { type: 'tool_end', toolName, toolResult: result }
+              yield { type: 'tool_end', toolName, toolRunId, toolResult: result }
               break
             }
           }
@@ -363,7 +364,7 @@ export class Agent {
           }
         } catch (err: any) {
           log.agent(`Tool ${toolName} FAILED: ${err.message}`)
-          yield { type: 'tool_error', toolName, error: err.message }
+          yield { type: 'tool_error', toolName, toolRunId, error: err.message }
           lastToolResult = `Error: ${err.message}`
           apiMessages.push({ role: 'tool', content: `Error: ${err.message}` })
         }

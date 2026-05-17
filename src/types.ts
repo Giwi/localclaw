@@ -38,6 +38,7 @@ export interface StreamChunk {
   type: 'text' | 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error' | 'done' | 'error'
   content?: string
   toolName?: string
+  toolRunId?: string
   toolArgs?: Record<string, any>
   toolResult?: string
   error?: string
@@ -48,6 +49,7 @@ export function agentEventToChunk(event: AgentEvent): StreamChunk {
     type: event.type,
     content: event.content,
     toolName: event.toolName,
+    toolRunId: event.toolRunId,
     toolArgs: event.toolArgs,
     toolResult: event.toolResult,
     error: event.error,

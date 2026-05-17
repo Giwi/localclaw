@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
+import fs from 'fs'
 import { openDb } from './db.js'
 import { createRouter } from './api.js'
 import { Agent } from './agent.js'
@@ -14,7 +15,6 @@ const PORT = parseInt(process.env.LOCALCLAW_PORT || '4173', 10)
 const DATA_DIR = process.env.LOCALCLAW_DATA_DIR || path.join(process.env.HOME || '/tmp', '.localclaw')
 const CLIENT_DIR = path.resolve(import.meta.dirname, '..', 'client', 'dist', 'client', 'browser')
 
-import fs from 'fs'
 fs.mkdirSync(path.join(DATA_DIR, 'downloads'), { recursive: true })
 
 const db = openDb(DATA_DIR)
@@ -39,7 +39,7 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(CLIENT_DIR, 'index.html'))
 })
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(chalk.cyan(`\n  ╔══════════════════════════════════════════╗`))
   console.log(chalk.cyan(`  ║          localclaw v0.1.0               ║`))
   console.log(chalk.cyan(`  ║   autonomous agent · ollama + opencode  ║`))
@@ -63,3 +63,20 @@ app.listen(PORT, () => {
     log.info('SearXNG: not configured, using DuckDuckGo fallback')
   }
 })
+
+function shutdown(signal: string) {
+  log.info(`Received ${signal}, shutting down gracefully...`)
+  scheduler.stop()
+  server.close(() => {
+    db.close()
+    log.info('Shutdown complete')
+    process.exit(0)
+  })
+  setTimeout(() => {
+    log.warn('Forced shutdown after timeout')
+    process.exit(1)
+  }, 5000)
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))

@@ -12,6 +12,7 @@ import {
   addMessage,
   deleteSession,
   updateSessionName,
+  deleteMessagesAfter,
   createBackgroundTask,
   listBackgroundTasks,
   getBackgroundTask,
@@ -90,6 +91,17 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
     res.json(messages)
   })
 
+  router.patch('/sessions/:id/messages/:msgId', (req: Request, res: Response) => {
+    const { content } = req.body || {}
+    if (!content || typeof content !== 'string') {
+      res.status(400).json({ error: 'content is required' })
+      return
+    }
+    deleteMessagesAfter(db, req.params.id, req.params.msgId)
+    const history = getMessages(db, req.params.id)
+    res.json(history)
+  })
+
   router.get('/background-tasks', (req: Request, res: Response) => {
     const sessionId = req.query.session_id as string | undefined
     const tasks = listBackgroundTasks(db, sessionId)
@@ -122,6 +134,33 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
   router.delete('/knowledge/:id', (req: Request, res: Response) => {
     deleteKnowledgeDocument(db, req.params.id)
     res.json({ ok: true })
+  })
+
+  router.post('/sessions/:id/upload', upload.single('file'), async (req: Request, res: Response) => {
+    const file = req.file
+    if (!file) {
+      res.status(400).json({ error: 'No file uploaded' })
+      return
+    }
+    const ext = path.extname(file.originalname).toLowerCase()
+    let text = ''
+    try {
+      if (ext === '.txt' || ext === '.md') {
+        text = fs.readFileSync(file.path, 'utf-8')
+      } else if (ext === '.pdf') {
+        const outPath = file.path + '.txt'
+        execSync(`pdftotext -layout "${file.path}" "${outPath}"`, { timeout: 30000 })
+        text = fs.readFileSync(outPath, 'utf-8')
+        try { fs.unlinkSync(outPath) } catch {}
+      } else {
+        text = `[Uploaded file: ${file.originalname} (${(file.size / 1024).toFixed(1)} KB)]`
+      }
+    } catch (err: any) {
+      text = `[Uploaded file: ${file.originalname}]`
+    }
+    try { fs.unlinkSync(file.path) } catch {}
+    const msg = addMessage(db, { sessionId: req.params.id, role: 'user', content: text.trim() || `[Uploaded: ${file.originalname}]` })
+    res.json(msg)
   })
 
   router.post('/knowledge/upload', upload.single('file'), async (req: Request, res: Response) => {
@@ -248,9 +287,16 @@ except Exception as e:
     let fullResponse = ''
     let eventCount = 0
     const startTime = Date.now()
+    let aborted = false
+
+    req.on('close', () => { aborted = true })
 
     try {
       for await (const event of agent.run(session.model, ollamaMessages, session.id)) {
+        if (aborted) {
+          log.info(`Chat  session=${session.id.slice(0, 8)} aborted by client`)
+          break
+        }
         eventCount++
         const chunk = agentEventToChunk(event)
         res.write(`data: ${JSON.stringify(chunk)}\n\n`)

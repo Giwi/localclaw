@@ -106,6 +106,12 @@ export function deleteSession(db: BetterSqlite3.Database, id: string) {
   db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
 }
 
+export function deleteMessagesAfter(db: BetterSqlite3.Database, sessionId: string, messageId: string) {
+  const msg = db.prepare('SELECT created_at FROM messages WHERE id = ?').get(messageId) as { created_at: string } | undefined
+  if (!msg) return
+  db.prepare('DELETE FROM messages WHERE session_id = ? AND created_at > ?').run(sessionId, msg.created_at)
+}
+
 export function addMessage(
   db: BetterSqlite3.Database,
   msg: Omit<Message, 'id' | 'createdAt'>

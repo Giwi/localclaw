@@ -32,6 +32,7 @@ export class App implements OnInit, OnDestroy {
   loading = signal(false)
   currentTheme = signal('light')
   sidebarOpen = signal(true)
+  editingMsg = signal<string | null>(null)
 
   private chatSubscription: Subscription | null = null
 
@@ -136,26 +137,63 @@ export class App implements OnInit, OnDestroy {
     }
   }
 
+  uploadFile(event: Event) {
+    const target = event.target as HTMLInputElement
+    const file = target.files?.[0]
+    const session = this.currentSession()
+    if (!file || !session) return
+    this.api.uploadFile(session.id, file).subscribe((msg) => {
+      this.messages.update((m) => [...m, msg])
+      this.scrollDown()
+    })
+    target.value = ''
+  }
+
+  editMessage(msg: Message) {
+    this.editingMsg.set(msg.id)
+    this.input.set(msg.content)
+  }
+
+  cancelEdit() {
+    this.editingMsg.set(null)
+    this.input.set('')
+  }
+
+  stopGeneration() {
+    this.api.cancelChat()
+    this.loading.set(false)
+  }
+
   send() {
     const text = this.input().trim()
     const session = this.currentSession()
     if (!text || !session || this.loading()) return
 
+    const editId = this.editingMsg()
     this.input.set('')
+    this.editingMsg.set(null)
     this.toolEvents.set([])
+    this.chatSubscription?.unsubscribe()
 
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      sessionId: session.id,
-      role: 'user',
-      content: text,
-      createdAt: new Date().toISOString(),
+    if (editId) {
+      this.api.editMessage(session.id, editId, text).subscribe(() => {
+        this.api.getMessages(session.id).subscribe((msgs) => {
+          this.messages.set(msgs)
+        })
+      })
+    } else {
+      const userMsg: Message = {
+        id: crypto.randomUUID(),
+        sessionId: session.id,
+        role: 'user',
+        content: text,
+        createdAt: new Date().toISOString(),
+      }
+      this.messages.update((m) => [...m, userMsg])
     }
-    this.messages.update((m) => [...m, userMsg])
+
     this.loading.set(true)
     this.scrollDown()
-
-    this.chatSubscription?.unsubscribe()
 
     let assistantContent = ''
     this.chatSubscription = this.api.streamChat(session.id, text).subscribe({
@@ -184,7 +222,7 @@ export class App implements OnInit, OnDestroy {
 
         if (chunk.type === 'tool_start') {
           this.toolEvents.update((e) => [...e, {
-            id: crypto.randomUUID(),
+            id: chunk.toolRunId || crypto.randomUUID(),
             type: 'tool_start',
             toolName: chunk.toolName || '',
             toolArgs: chunk.toolArgs,
@@ -197,7 +235,7 @@ export class App implements OnInit, OnDestroy {
             const copy = [...e]
             for (let i = copy.length - 1; i >= 0; i--) {
               const ev = copy[i]
-              if ((ev.type === 'tool_start' || ev.type === 'tool_chunk') && ev.toolName === chunk.toolName) {
+              if (ev.id === chunk.toolRunId && (ev.type === 'tool_start' || ev.type === 'tool_chunk')) {
                 copy[i] = { ...ev, type: 'tool_chunk', content: (ev.content || '') + (chunk.content || '') }
                 break
               }
@@ -210,7 +248,7 @@ export class App implements OnInit, OnDestroy {
           this.toolEvents.update((e) => {
             const copy = [...e]
             for (let i = copy.length - 1; i >= 0; i--)
-              if (copy[i].type === 'tool_start' && copy[i].toolName === chunk.toolName)
+              if (copy[i].id === chunk.toolRunId && copy[i].type === 'tool_start')
                 { copy[i] = { ...copy[i], type: 'tool_end', toolResult: chunk.toolResult }; break }
             return copy
           })
@@ -219,15 +257,15 @@ export class App implements OnInit, OnDestroy {
           this.toolEvents.update((e) => {
             const copy = [...e]
             for (let i = copy.length - 1; i >= 0; i--)
-              if (copy[i].type === 'tool_start' && copy[i].toolName === chunk.toolName)
+              if (copy[i].id === chunk.toolRunId && copy[i].type === 'tool_start')
                 { copy[i] = { ...copy[i], type: 'tool_error', error: chunk.error }; break }
             return copy
           })
         }
-        if (chunk.type === 'done') { this.loading.set(false); this.loadSessions(); this.chatSubscription = null }
-        if (chunk.type === 'error') { console.error(chunk.error); this.loading.set(false); this.chatSubscription = null }
+        if (chunk.type === 'done') { this.loading.set(false); this.loadSessions(); this.chatSubscription = null; this.api.cancelChat() }
+        if (chunk.type === 'error') { console.error(chunk.error); this.loading.set(false); this.chatSubscription = null; this.api.cancelChat() }
       },
-      error: () => { this.loading.set(false); this.chatSubscription = null },
+      error: () => { this.loading.set(false); this.chatSubscription = null; this.api.cancelChat() },
     })
   }
 

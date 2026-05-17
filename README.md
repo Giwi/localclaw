@@ -238,7 +238,45 @@ Tool execution output is streamed in real-time via `tool_chunk` events, giving v
 ```bash
 npm run build    # Builds both server (tsc) and client (ng build)
 npm start        # Start production server
-docker build -t localclaw .   # Or use Docker
+docker build -t localclaw .   # Or build Docker image
+```
+
+## Docker Stack (Recommended)
+
+The fastest way to run everything (Ollama + localclaw + SearXNG):
+
+```bash
+# 1. Clone and enter the repo
+cd localclaw
+
+# 2. Start the full stack
+docker compose up -d
+
+# 3. Pull a model in Ollama
+docker exec localclaw-ollama ollama pull qwen2.5:7b-instruct-q3_K_M
+docker exec localclaw-ollama ollama pull nomic-embed-text
+
+# 4. Open http://localhost:4173
+```
+
+**GPU support**: The Ollama container is configured with NVIDIA GPU reservations. For AMD GPUs, remove the `deploy.resources` block and set `OLLAMA_VULKAN=1` in the ollama service environment — requires `runtime: runc` or native Vulkan support on the host.
+
+**Configuration**: Pass variables via `.env` in the project root — values are picked up by `docker compose`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `LOCALCLAW_PORT` | `4173` | Host port for the web UI |
+| `LOCALCLAW_MODEL` | `ollama/qwen2.5:7b-instruct-q3_K_M` | Default chat model |
+| `LOCALCLAW_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model for RAG |
+| `SEARXNG_SECRET_KEY` | `change_me` | SearXNG secret key |
+
+To update the stack after pulling new code:
+
+```bash
+docker compose down
+git pull
+docker compose build localclaw
+docker compose up -d
 ```
 
 ## Frontend

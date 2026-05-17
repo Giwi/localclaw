@@ -31,6 +31,7 @@ export interface AgentEvent {
   type: 'text' | 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error' | 'done' | 'error'
   content?: string
   toolName?: string
+  toolRunId?: string
   toolArgs?: Record<string, any>
   toolResult?: string
   error?: string

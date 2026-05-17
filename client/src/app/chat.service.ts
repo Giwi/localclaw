@@ -22,6 +22,7 @@ export interface StreamChunk {
   type: 'text' | 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error' | 'done' | 'error'
   content?: string
   toolName?: string
+  toolRunId?: string
   toolArgs?: Record<string, any>
   toolResult?: string
   error?: string
@@ -31,6 +32,13 @@ export interface StreamChunk {
 export class ChatService {
   private http = inject(HttpClient)
   private zone = inject(NgZone)
+
+  private abortController: AbortController | null = null
+
+  cancelChat() {
+    this.abortController?.abort()
+    this.abortController = null
+  }
 
   getSessions() {
     return this.http.get<Session[]>('/api/sessions')
@@ -56,13 +64,26 @@ export class ChatService {
     return this.http.patch<Session>(`/api/sessions/${id}`, { name })
   }
 
+  editMessage(sessionId: string, msgId: string, content: string) {
+    return this.http.patch<Message[]>(`/api/sessions/${sessionId}/messages/${msgId}`, { content })
+  }
+
+  uploadFile(sessionId: string, file: File): Observable<Message> {
+    const fd = new FormData()
+    fd.append('file', file)
+    return this.http.post<Message>(`/api/sessions/${sessionId}/upload`, fd)
+  }
+
   streamChat(sessionId: string, message: string): Observable<StreamChunk> {
     const subject = new Subject<StreamChunk>()
+
+    this.abortController = new AbortController()
 
     fetch(`/api/sessions/${sessionId}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
+      signal: this.abortController.signal,
     }).then(async (res) => {
       const reader = res.body?.getReader()
       if (!reader) {
@@ -92,10 +113,20 @@ export class ChatService {
           }
         }
         this.zone.run(() => subject.complete())
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          this.zone.run(() => subject.complete())
+        } else {
+          this.zone.run(() => subject.error(err))
+        }
+      }
+    }).catch((err: any) => {
+      if (err?.name === 'AbortError') {
+        this.zone.run(() => subject.complete())
+      } else {
         this.zone.run(() => subject.error(err))
       }
-    }).catch((err) => this.zone.run(() => subject.error(err)))
+    })
 
     return subject.asObservable()
   }
