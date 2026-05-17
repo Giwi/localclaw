@@ -265,7 +265,7 @@ export class App implements OnInit, OnDestroy {
           this.toolEvents.update((e) => {
             const copy = [...e]
             for (let i = copy.length - 1; i >= 0; i--)
-              if (copy[i].id === chunk.toolRunId && copy[i].type === 'tool_start')
+              if (copy[i].id === chunk.toolRunId && (copy[i].type === 'tool_start' || copy[i].type === 'tool_chunk'))
                 { copy[i] = { ...copy[i], type: 'tool_end', toolResult: chunk.toolResult }; break }
             return copy
           })
@@ -274,7 +274,7 @@ export class App implements OnInit, OnDestroy {
           this.toolEvents.update((e) => {
             const copy = [...e]
             for (let i = copy.length - 1; i >= 0; i--)
-              if (copy[i].id === chunk.toolRunId && copy[i].type === 'tool_start')
+              if (copy[i].id === chunk.toolRunId && (copy[i].type === 'tool_start' || copy[i].type === 'tool_chunk'))
                 { copy[i] = { ...copy[i], type: 'tool_error', error: chunk.error }; break }
             return copy
           })
