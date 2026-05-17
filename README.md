@@ -1,7 +1,7 @@
 # localclaw
 
 <p align="center">
-  <img src="client/src/assets/localclaw.png" width="120" alt="localclaw logo">
+  <img src="client/src/assets/localclaw.png" width="200" alt="localclaw logo">
 </p>
 
 Autonomous AI agent powered by Ollama + OpenCode. Runs locally, creates its own tools, searches the web, executes code, and delegates complex tasks — all through a chat UI or REST API.
