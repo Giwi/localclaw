@@ -11,23 +11,25 @@ Autonomous AI agent powered by Ollama + OpenCode. Runs locally, creates its own 
 ```
 localclaw/
 ├── src/
-│   ├── index.ts           # Express server entry point
+│   ├── index.ts           # Express server + HTTP server entry point
+│   ├── ws.ts              # WebSocket server (replaces SSE for chat streaming)
 │   ├── agent.ts           # Agent loop — Ollama function calling, tool execution, persistence
-│   ├── api.ts             # REST API + SSE streaming for chat
-│   ├── db.ts              # SQLite sessions, messages, memories, background tasks
+│   ├── api.ts             # REST API routes (sessions, messages, uploads, knowledge)
+│   ├── db.ts              # SQLite sessions, messages, memories, FTS5, background tasks
+│   ├── plugins.ts         # Plugin scanner (JS/ESM files + npm packages)
 │   ├── log.ts             # Structured logger with levels (debug/info/warn/error)
 │   ├── ollama.ts          # Ollama API client (streaming + non-streaming)
 │   ├── opencode.ts        # OpenCode subprocess delegation
 │   ├── embeddings.ts      # Ollama embeddings API for RAG memory
 │   ├── scheduler.ts       # Background task scheduler (polls every 30s)
 │   └── tools/
-│       ├── types.ts        # Tool type definitions
+│       ├── types.ts        # Tool type definitions + AgentEvent
 │       ├── registry.ts     # Tool registry — builtins + dynamic create_tool
 │       └── builtin/
 │           ├── web-fetch.ts           # Web search (SearXNG / DuckDuckGo) + URL fetch
 │           ├── fetch-news.ts          # News search (SearXNG news + RSS feeds)
-│           ├── read-file.ts           # Local file reading
-│           ├── write-file.ts          # Local file writing
+│           ├── read-file.ts           # Local file reading (path traversal protected)
+│           ├── write-file.ts          # Local file writing (path traversal protected)
 │           ├── run-bash.ts            # Bash command execution (streaming output)
 │           ├── opencode-task.ts       # OpenCode delegation
 │           ├── generate-image.ts      # Image generation via Ollama
@@ -37,12 +39,13 @@ localclaw/
 │           ├── weather.ts             # Weather forecast (wttr.in / Open-Meteo)
 │           ├── search-knowledge.ts    # RAG knowledge base search
 │           └── browser-automation.ts  # Headless Chromium browser control
-├── client/                 # Angular 20 frontend
+├── client/                 # Angular 20 frontend (SPA)
 ├── searxng/
 │   └── settings.yml        # SearXNG config (JSON API + image proxy)
-├── docker-compose.yml      # SearXNG service (port 8888)
+├── plugins/                # Bundled plugin directory
+├── docker-compose.yml      # Ollama + SearXNG + localclaw stack
 ├── Dockerfile              # Production build
-└── .env                    # Configuration
+└── .env                    # Configuration (gitignored)
 ```
 
 ## Quick Start
@@ -191,12 +194,15 @@ The `send_telegram` tool sends messages via a Telegram bot. Configure in `.env`:
 
 ```
 LOCALCLAW_TELEGRAM_BOT_TOKEN=your-bot-token
+LOCALCLAW_TELEGRAM_CHAT_ID=your-chat-id   # optional — used as fallback
 ```
 
 Usage:
 1. Message your bot on Telegram
 2. Call `send_telegram({ action: "get_chat_id" })` to discover your chat ID
 3. Call `send_telegram({ action: "send", chat_id: "123456", text: "Hello!" })` to send messages
+
+If `LOCALCLAW_TELEGRAM_CHAT_ID` is set in `.env`, the `chat_id` argument can be omitted — the tool falls back to the env var automatically.
 
 ### Web Search
 
@@ -214,28 +220,40 @@ Primary backend is SearXNG (Docker container on port 8888) with custom `settings
 | `DELETE` | `/api/sessions/:id` | Delete session |
 | `PATCH` | `/api/sessions/:id` | Rename session |
 | `GET` | `/api/sessions/:id/messages` | Get messages |
-| `POST` | `/api/sessions/:id/chat` | Send message (SSE streaming response) |
+| `PATCH` | `/api/sessions/:id/messages/:msgId` | Edit message (truncates conversation after it) |
+| `POST` | `/api/sessions/:id/upload` | Upload file (txt/pdf/docx) for chat context |
 | `GET` | `/api/background-tasks` | List background tasks (optional `?session_id=...`) |
 | `GET` | `/api/background-tasks/:id` | Get a background task |
 | `DELETE` | `/api/background-tasks/:id` | Delete a background task |
 | `PATCH` | `/api/background-tasks/:id` | Enable/disable a background task |
+| `GET` | `/api/knowledge` | List uploaded knowledge documents |
+| `DELETE` | `/api/knowledge/:id` | Delete a knowledge document |
 
-### Chat Streaming
+### Chat Streaming (WebSocket)
 
-`POST /api/sessions/:id/chat` returns a Server-Sent Events stream with these event types:
+Connect to `ws://host/ws` and send a JSON message:
 
-```
-data: {"type":"text","content":"thinking..."}
-data: {"type":"tool_start","toolName":"web_fetch","toolArgs":{...}}
-data: {"type":"tool_chunk","toolName":"web_fetch","content":"stdout line 1..."}
-data: {"type":"tool_chunk","toolName":"web_fetch","content":"stdout line 2..."}
-data: {"type":"tool_end","toolName":"web_fetch","toolResult":"..."}
-data: {"type":"tool_error","toolName":"web_fetch","error":"..."}
-data: {"type":"text","content":"final answer"}
-data: {"type":"done"}
+```json
+{"type":"chat","sessionId":"<uuid>","message":"Hello!"}
 ```
 
-Tool execution output is streamed in real-time via `tool_chunk` events, giving visibility into long-running commands.
+The server streams events back as JSON messages:
+
+```
+{"type":"text","content":"thinking..."}
+{"type":"tool_start","toolName":"web_fetch","toolRunId":"<uuid>","toolArgs":{...}}
+{"type":"tool_chunk","toolName":"web_fetch","toolRunId":"<uuid>","content":"stdout line 1..."}
+{"type":"tool_end","toolName":"web_fetch","toolRunId":"<uuid>","toolResult":"..."}
+{"type":"tool_error","toolName":"web_fetch","toolRunId":"<uuid>","error":"..."}
+{"type":"text","content":"final answer"}
+{"type":"done"}
+```
+
+Each tool invocation gets a unique `toolRunId` so concurrent or repeated tool calls are matched correctly in the UI. Tool execution output is streamed in real-time via `tool_chunk` events.
+
+**Development proxy:** When using `ng serve`, the Angular dev server proxies `/ws` to the backend. Configured in `client/proxy.conf.js`.
+
+**Stop generation:** Close the WebSocket from the client side — the backend detects `req.on('close')` and aborts the agent loop.
 
 ## Production Build
 
@@ -285,9 +303,13 @@ docker compose up -d
 
 ## Frontend
 
-Angular 20 single-page application with:
+Angular 20 single-page application (signals-based) with:
+- WebSocket-based real-time chat streaming with tool event matching per `toolRunId`
 - Markdown rendering with syntax highlighting (highlight.js, atom-one-dark theme)
-- 2 themes: Light and Dark
-- Collapsible tool event cards showing real-time agent activity
-- Dark mode auto-detection via `prefers-color-scheme`
-- File downloads served via `/downloads` static route
+- 2 themes: Light and Dark with auto-detection via `prefers-color-scheme`
+- Collapsible tool event cards showing real-time agent activity (streaming chunks via `tool_chunk`)
+- Stop generation button (closes WebSocket, aborts agent loop)
+- Message editing — edit any user message, conversation is truncated after the edit point
+- File upload — attach text/PDF/docx files via paperclip icon, content extracted and added as user message
+- Session management — create, rename, delete sessions
+- 120s timeout fallback to reset loading state if no response received
