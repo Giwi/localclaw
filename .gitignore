@@ -2,8 +2,7 @@ node_modules/
 dist/
 .env
 
-# localclaw runtime data
-~/.localclaw/
+# localclaw runtime data (stored in $HOME/.localclaw, outside the repo)
 
 # IDE
 .vscode/

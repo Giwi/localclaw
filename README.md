@@ -20,16 +20,19 @@ localclaw/
 │       ├── types.ts        # Tool type definitions
 │       ├── registry.ts     # Tool registry — builtins + dynamic create_tool
 │       └── builtin/
-│           ├── web-fetch.ts      # Web search (SearXNG / DuckDuckGo) + URL fetch
-│           ├── fetch-news.ts     # News search (SearXNG news + RSS feeds)
-│           ├── read-file.ts      # Local file reading
-│           ├── write-file.ts     # Local file writing
-│           ├── run-bash.ts       # Bash command execution (streaming output)
-│           ├── opencode-task.ts  # OpenCode delegation
-│           ├── generate-image.ts # Image generation via Ollama
-│           ├── schedule-task.ts  # Background task scheduling
-│           ├── send-email.ts     # Email delivery via Mailgun
-│           └── send-telegram.ts  # Telegram bot messaging
+│           ├── web-fetch.ts           # Web search (SearXNG / DuckDuckGo) + URL fetch
+│           ├── fetch-news.ts          # News search (SearXNG news + RSS feeds)
+│           ├── read-file.ts           # Local file reading
+│           ├── write-file.ts          # Local file writing
+│           ├── run-bash.ts            # Bash command execution (streaming output)
+│           ├── opencode-task.ts       # OpenCode delegation
+│           ├── generate-image.ts      # Image generation via Ollama
+│           ├── schedule-task.ts       # Background task scheduling
+│           ├── send-email.ts          # Email delivery via Mailgun
+│           ├── send-telegram.ts       # Telegram bot messaging
+│           ├── weather.ts             # Weather forecast (wttr.in / Open-Meteo)
+│           ├── search-knowledge.ts    # RAG knowledge base search
+│           └── browser-automation.ts  # Headless Chromium browser control
 ├── client/                 # Angular 20 frontend
 ├── searxng/
 │   └── settings.yml        # SearXNG config (JSON API + image proxy)
@@ -129,6 +132,8 @@ All settings via `.env`:
 - **send_email** — Send email via Mailgun API. Supports plain text and HTML. Combine with background tasks for recurring delivery.
 - **send_telegram** — Send Telegram messages via bot. Includes a `get_chat_id` helper to discover chat IDs. Combine with background tasks for recurring notifications.
 - **browser_automation** — Control a headless Chromium browser (via Puppeteer). Navigate URLs, click elements, extract page content, take screenshots, and fill forms.
+- **weather** — Get current weather and forecasts for any location. Uses wttr.in with Open-Meteo fallback.
+- **search_knowledge** — Search the local RAG knowledge base (uploaded documents + past tool results). Supports keyword and semantic search modes.
 - **schedule_task** — Schedule, unschedule, and list background tasks. Supports `every Xm`, `every Xh`, `daily at HH:MM`, `daily`, `weekly` schedules.
 - **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash. Execution respects sandbox mode.
 
