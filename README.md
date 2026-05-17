@@ -50,7 +50,7 @@ localclaw/
 
 ## Quick Start
 
-**Prerequisites:** Node.js 22+, Ollama with a model pulled (e.g. `qwen2.5:7b-instruct-q3_K_M`), Docker (optional, for SearXNG).
+**Prerequisites:** Node.js 22+, Ollama with a model pulled (e.g. `qwen2.5:7b-instruct-q3_K_M`), [OpenCode](https://opencode.ai) CLI, Docker (optional, for SearXNG).
 
 ```bash
 # 1. Start SearXNG (optional — falls back to DuckDuckGo)
@@ -109,6 +109,7 @@ All settings via `.env`:
 | `LOCALCLAW_MODEL` | `ollama/qwen2.5:7b-instruct-q3_K_M` | Default model |
 | `LOCALCLAW_SEARXNG_URL` | `http://localhost:8888` | SearXNG search URL (empty = DuckDuckGo fallback) |
 | `LOCALCLAW_OPENCODE_BIN` | `opencode` | OpenCode binary path |
+| `LOCALCLAW_OPENCODE_API_KEY` | — | Anthropic API key for OpenCode cloud models (optional) |
 | `LOCALCLAW_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `LOCALCLAW_SANDBOX_ENABLED` | `false` | Wrap code execution in Docker containers |
 | `LOCALCLAW_SANDBOX_IMAGE` | `ubuntu:22.04` | Docker image for sandboxed execution |
@@ -203,6 +204,19 @@ Usage:
 3. Call `send_telegram({ action: "send", chat_id: "123456", text: "Hello!" })` to send messages
 
 If `LOCALCLAW_TELEGRAM_CHAT_ID` is set in `.env`, the `chat_id` argument can be omitted — the tool falls back to the env var automatically.
+
+### OpenCode
+
+[OpenCode](https://opencode.ai) is a CLI coding agent that localclaw delegates complex multi-file coding tasks to. Configure the binary path and API key in `.env`:
+
+```
+LOCALCLAW_OPENCODE_BIN=opencode
+LOCALCLAW_OPENCODE_API_KEY=sk-ant-...   # optional — enables Anthropic Claude models
+```
+
+When `LOCALCLAW_OPENCODE_API_KEY` is set, it is forwarded to OpenCode as `ANTHROPIC_API_KEY` and the `setup:opencode` script adds an Anthropic provider entry to the OpenCode config. Without it, OpenCode uses the local Ollama provider only.
+
+Run `npm run setup:opencode` to initialise the OpenCode config file at `~/.config/opencode/opencode.json`.
 
 ### Web Search
 

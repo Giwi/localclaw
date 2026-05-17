@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 
 const OPENCODE_BIN = process.env.LOCALCLAW_OPENCODE_BIN || 'opencode'
+const OPENCODE_API_KEY = process.env.LOCALCLAW_OPENCODE_API_KEY
 const OLLAMA_BASE = process.env.LOCALCLAW_OLLAMA_URL || 'http://localhost:11434'
 
 const OPENCODE_CONFIG = JSON.stringify({
@@ -33,6 +34,7 @@ export async function runOpencodeTask(
         ...process.env,
         OPENCODE_DISABLE_AUTOUPDATE: '1',
         OPENCODE_CONFIG_CONTENT: OPENCODE_CONFIG,
+        ...(OPENCODE_API_KEY ? { ANTHROPIC_API_KEY: OPENCODE_API_KEY } : {}),
       },
     })
 
