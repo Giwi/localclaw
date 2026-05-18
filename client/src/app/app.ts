@@ -339,6 +339,7 @@ export class App implements OnInit, OnDestroy {
     const done = () => {
       this.loading.set(false)
       this.loadSessions()
+      this.loadBackgroundTasks()
       this.chatSubscription = null
       this.api.cancelChat()
       if (this.loadingTimeout) { clearTimeout(this.loadingTimeout); this.loadingTimeout = null }
