@@ -119,6 +119,9 @@ All settings via `.env`:
 | `LOCALCLAW_MAILGUN_FROM` | — | Sender email address |
 | `LOCALCLAW_TELEGRAM_BOT_TOKEN` | — | Telegram bot token for messaging |
 | `LOCALCLAW_TELEGRAM_CHAT_ID` | — | Default Telegram chat ID for notifications |
+| `LOCALCLAW_API_KEY` | — | API key for Bearer token auth on REST endpoints (optional) |
+| `LOCALCLAW_HTTPS_KEY` | — | Path to TLS private key for HTTPS (optional) |
+| `LOCALCLAW_HTTPS_CERT` | — | Path to TLS certificate for HTTPS (optional) |
 
 ## How It Works
 
@@ -223,6 +226,12 @@ Run `npm run setup:opencode` to initialise the OpenCode config file at `~/.confi
 Primary backend is SearXNG (Docker container on port 8888) with custom `settings.yml` that enables JSON API and image-focused engines (Pixabay, Flickr, DeviantArt, Getty, Openverse). Falls back to DuckDuckGo HTML search if SearXNG is not configured.
 
 ## API
+
+All API routes (except `/api/health`) require authentication when `LOCALCLAW_API_KEY` is set. Pass the key as a Bearer token:
+
+```
+Authorization: Bearer <your-api-key>
+```
 
 | Method | Path | Description |
 |---|---|---|
