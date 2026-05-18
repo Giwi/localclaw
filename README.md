@@ -11,11 +11,12 @@ Autonomous AI agent powered by Ollama + OpenCode. Runs locally, creates its own 
 ```
 localclaw/
 ├── src/
-│   ├── index.ts           # Express server + HTTP server entry point
+│   ├── index.ts           # Express server + HTTP/HTTPS server entry point
 │   ├── ws.ts              # WebSocket server (replaces SSE for chat streaming)
 │   ├── agent.ts           # Agent loop — Ollama function calling, tool execution, persistence
 │   ├── api.ts             # REST API routes (sessions, messages, uploads, knowledge)
-│   ├── db.ts              # SQLite sessions, messages, memories, FTS5, background tasks
+│   ├── auth.ts            # Bearer token auth middleware (optional)
+│   ├── db.ts              # SQLite sessions, messages, memories, FTS5, background tasks, audit log
 │   ├── plugins.ts         # Plugin scanner (JS/ESM files + npm packages)
 │   ├── log.ts             # Structured logger with levels (debug/info/warn/error)
 │   ├── ollama.ts          # Ollama API client (streaming + non-streaming)
@@ -45,7 +46,8 @@ localclaw/
 ├── plugins/                # Bundled plugin directory
 ├── docker-compose.yml      # Ollama + SearXNG + localclaw stack
 ├── Dockerfile              # Production build
-└── .env                    # Configuration (gitignored)
+├── .env                    # Configuration (gitignored)
+├── .env.example            # Documented configuration template
 ```
 
 ## Quick Start
@@ -151,6 +153,18 @@ All settings via `.env`:
 ### RAG Memory
 
 Tool results are automatically embedded (via Ollama embeddings API) and stored in SQLite. At the start of each conversation turn, the agent retrieves semantically relevant past tool results and injects them into the system prompt — enabling cross-session memory without filling the context window.
+
+### Security
+
+**API authentication** — When `LOCALCLAW_API_KEY` is set, all REST endpoints (except `/api/health`) require a `Bearer <token>` header. Protects the agent from unauthorized access in exposed deployments.
+
+**Command blocklist** — The `run_bash` tool blocks potentially destructive commands (`rm -rf /`, `mkfs`, `dd if=/dev/zero`, fork bombs, etc.) before execution.
+
+**Shell injection prevention** — Dynamic tools (JavaScript/Python) created via `create_tool` are executed with `execFileSync` instead of a shell, removing shell injection vectors. Bash tools still need a shell but pass through the command blocklist.
+
+**Audit log** — Every tool call is recorded in the `tool_calls` SQLite table with session, tool name, arguments, result/error, and duration for post-hoc inspection.
+
+**Path traversal protection** — `read_file` / `write_file` tools validate paths against the data directory to prevent directory traversal.
 
 ### Code Execution Sandbox
 
@@ -283,6 +297,7 @@ Each tool invocation gets a unique `toolRunId` so concurrent or repeated tool ca
 ```bash
 npm run build    # Builds both server (tsc) and client (ng build)
 npm start        # Start production server
+npm test         # Run unit tests (vitest)
 docker build -t localclaw .   # Or build Docker image
 ```
 
