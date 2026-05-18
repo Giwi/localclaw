@@ -9,7 +9,7 @@ const CHECK_INTERVAL = 30_000
 function parseSchedule(schedule: string): { type: 'interval' | 'daily'; minutes: number; time?: string } {
   const s = schedule.toLowerCase().trim()
 
-  const minMatch = s.match(/every\s+(\d+)\s*(?:m(?:in(?:ute)?s?)?)?\b/)
+  const minMatch = s.match(/every\s+(\d+)\s*m(?:in(?:ute)?s?)?\b/)
   if (minMatch) return { type: 'interval', minutes: Math.max(parseInt(minMatch[1]), 1) }
 
   const hourMatch = s.match(/every\s+(\d+)\s*h(?:ou)?r?s?\b/)
