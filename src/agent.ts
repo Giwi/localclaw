@@ -258,15 +258,22 @@ export class Agent {
       log.agent(`Ollama ${elapsed}ms  response=${responseLog}`)
 
       if (!toolCalls || toolCalls.length === 0) {
+        const isAdvisory = /(you can|you could|i suggest|try using|you need to|you should|i will|i'll|let me|going to)/i.test(content)
+
         if (forceTool && content.trim()) {
+          if (isAdvisory && loop < MAX_TOOL_LOOPS - 1) {
+            log.agent('Force-tool advisory response, re-prompting again')
+            apiMessages.push({ role: 'assistant', content })
+            apiMessages.push(FORCE_TOOL_MSG)
+            continue
+          }
           log.agent('Force-tool response accepted, yielding text')
           yield { type: 'text', content }
           return
         }
 
         if (content.trim()) {
-          const isAdvisory = /(you can|you could|i suggest|try using|you need to|you should)/i.test(content)
-          if (isAdvisory && !forceTool) {
+          if (isAdvisory) {
             log.agent(`Advisory response detected, re-prompting for tool use`)
             apiMessages.push({ role: 'assistant', content })
             apiMessages.push(FORCE_TOOL_MSG)
