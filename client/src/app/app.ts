@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal, viewChild, ElementRef, OnDestroy } f
 import { FormsModule } from '@angular/forms'
 import { JsonPipe, AsyncPipe } from '@angular/common'
 import { Subscription } from 'rxjs'
-import { ChatService, type Session, type Message } from './chat.service'
+import { ChatService, type Session, type Message, type BackgroundTask } from './chat.service'
 import { MarkdownPipe } from './markdown.pipe'
 
 export interface Toast {
@@ -39,11 +39,14 @@ export class App implements OnInit, OnDestroy {
   loading = signal(false)
   currentTheme = signal('light')
   sidebarOpen = signal(true)
+  sidebarView = signal<'sessions' | 'tasks'>('sessions')
   editingMsg = signal<string | null>(null)
   toasts = signal<Toast[]>([])
   renamingId = signal<string | null>(null)
   renameInput = signal('')
   selectedSessionIndex = signal(0)
+  backgroundTasks = signal<BackgroundTask[]>([])
+  loadingTasks = signal(false)
 
   private chatSubscription: Subscription | null = null
   private loadingTimeout: ReturnType<typeof setTimeout> | null = null
@@ -191,6 +194,47 @@ export class App implements OnInit, OnDestroy {
 
   cancelRename() {
     this.renamingId.set(null)
+  }
+
+  switchSidebarView(view: 'sessions' | 'tasks') {
+    this.sidebarView.set(view)
+    if (view === 'tasks') this.loadBackgroundTasks()
+  }
+
+  loadBackgroundTasks() {
+    this.loadingTasks.set(true)
+    this.api.getBackgroundTasks().subscribe({
+      next: (tasks) => { this.backgroundTasks.set(tasks); this.loadingTasks.set(false) },
+      error: () => { this.showToast('Failed to load tasks', 'error'); this.loadingTasks.set(false) },
+    })
+  }
+
+  toggleTask(task: BackgroundTask) {
+    this.api.toggleBackgroundTask(task.id, !task.enabled).subscribe({
+      next: () => {
+        this.backgroundTasks.update((list) => list.map((t) => t.id === task.id ? { ...t, enabled: !t.enabled } : t))
+        this.showToast(`Task ${task.enabled ? 'paused' : 'resumed'}`, 'success')
+      },
+      error: () => this.showToast('Failed to toggle task', 'error'),
+    })
+  }
+
+  deleteBgTask(e: Event, task: BackgroundTask) {
+    e.stopPropagation()
+    this.api.deleteBackgroundTask(task.id).subscribe({
+      next: () => {
+        this.backgroundTasks.update((list) => list.filter((t) => t.id !== task.id))
+        this.showToast('Task deleted', 'info')
+      },
+      error: () => this.showToast('Failed to delete task', 'error'),
+    })
+  }
+
+  formatSchedule(task: BackgroundTask): string {
+    const s = task.schedule
+    const next = task.nextRunAt ? new Date(task.nextRunAt).toLocaleString() : '—'
+    const last = task.lastRunAt ? new Date(task.lastRunAt).toLocaleString() : 'never'
+    return `${s} · next: ${next} · last: ${last}`
   }
 
   onSessionKeydown(e: KeyboardEvent) {

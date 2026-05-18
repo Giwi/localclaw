@@ -32,78 +32,149 @@
       </div>
     </div>
 
-    <!-- New session -->
-    <div class="p-2">
+    <!-- View switcher -->
+    <div style="display:flex;border-bottom:1px solid var(--glass-border);margin:0 8px;">
       <button
-        class="btn-neon"
-        (click)="newSession()"
-        style="width:100%;padding:9px 14px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:6px;justify-content:center;"
-      >
-        <span><i class="bi bi-plus-lg"></i></span> New Session
-      </button>
+        (click)="switchSidebarView('sessions')"
+        style="flex:1;padding:8px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-sidebar-muted);border-bottom:2px solid transparent;transition:all var(--transition);"
+        [style]="sidebarView() === 'sessions' ? 'color:var(--accent);border-bottom-color:var(--accent);' : ''"
+      ><i class="bi bi-chat-dots" style="margin-right:4px;"></i>Sessions</button>
+      <button
+        (click)="switchSidebarView('tasks')"
+        style="flex:1;padding:8px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-sidebar-muted);border-bottom:2px solid transparent;transition:all var(--transition);"
+        [style]="sidebarView() === 'tasks' ? 'color:var(--accent);border-bottom-color:var(--accent);' : ''"
+      ><i class="bi bi-clock" style="margin-right:4px;"></i>Tasks</button>
     </div>
 
-    <!-- Session list -->
-    <div
-      #sessionList
-      class="flex-grow-1 overflow-auto"
-      style="padding:4px 8px;"
-      tabindex="0"
-      (keydown)="onSessionKeydown($event)"
-      role="listbox"
-      aria-label="Session list"
-    >
-      @for (session of sessions(); track session.id; let i = $index) {
-        <div
-          class="session-item sidebar-item"
-          [class.active]="currentSession()?.id === session.id"
-          [class.keyboard-selected]="selectedSessionIndex() === i && currentSession()?.id !== session.id"
-          (click)="selectSession(session)"
-          (dblclick)="startRename(session)"
-          role="option"
-          [attr.aria-selected]="currentSession()?.id === session.id"
-          tabindex="-1"
-          style="padding:10px 12px;border-radius:var(--radius-sm);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;"
+    @if (sidebarView() === 'sessions') {
+      <!-- New session -->
+      <div class="p-2">
+        <button
+          class="btn-neon"
+          (click)="newSession()"
+          style="width:100%;padding:9px 14px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:6px;justify-content:center;"
         >
-          <div class="text-truncate" style="flex:1;min-width:0;">
-            @if (renamingId() === session.id) {
-              <input
-                [ngModel]="renameInput()"
-                (ngModelChange)="renameInput.set($event)"
-                (keydown.enter)="commitRename(session)"
-                (keydown.escape)="cancelRename()"
-                (blur)="commitRename(session)"
-                (click)="$event.stopPropagation()"
-                style="width:100%;padding:4px 8px;font-size:13px;border-radius:4px;border:1px solid var(--accent);background:var(--bg-primary);color:var(--text-primary);outline:none;"
-                autofocus
-              />
-            } @else {
-              <div style="font-size:13px;font-weight:500;color:var(--text-sidebar);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
-                {{ session.name }}
+          <span><i class="bi bi-plus-lg"></i></span> New Session
+        </button>
+      </div>
+
+      <!-- Session list -->
+      <div
+        #sessionList
+        class="flex-grow-1 overflow-auto"
+        style="padding:4px 8px;"
+        tabindex="0"
+        (keydown)="onSessionKeydown($event)"
+        role="listbox"
+        aria-label="Session list"
+      >
+        @for (session of sessions(); track session.id; let i = $index) {
+          <div
+            class="session-item sidebar-item"
+            [class.active]="currentSession()?.id === session.id"
+            [class.keyboard-selected]="selectedSessionIndex() === i && currentSession()?.id !== session.id"
+            (click)="selectSession(session)"
+            (dblclick)="startRename(session)"
+            role="option"
+            [attr.aria-selected]="currentSession()?.id === session.id"
+            tabindex="-1"
+            style="padding:10px 12px;border-radius:var(--radius-sm);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;"
+          >
+            <div class="text-truncate" style="flex:1;min-width:0;">
+              @if (renamingId() === session.id) {
+                <input
+                  [ngModel]="renameInput()"
+                  (ngModelChange)="renameInput.set($event)"
+                  (keydown.enter)="commitRename(session)"
+                  (keydown.escape)="cancelRename()"
+                  (blur)="commitRename(session)"
+                  (click)="$event.stopPropagation()"
+                  style="width:100%;padding:4px 8px;font-size:13px;border-radius:4px;border:1px solid var(--accent);background:var(--bg-primary);color:var(--text-primary);outline:none;"
+                  autofocus
+                />
+              } @else {
+                <div style="font-size:13px;font-weight:500;color:var(--text-sidebar);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
+                  {{ session.name }}
+                </div>
+              }
+              <div style="font-size:11px;color:var(--text-sidebar-muted);margin-top:2px;">
+                {{ session.model.replace('ollama/', '') }}
               </div>
-            }
-            <div style="font-size:11px;color:var(--text-sidebar-muted);margin-top:2px;">
-              {{ session.model.replace('ollama/', '') }}
             </div>
+            <button
+              class="session-delete"
+              (click)="deleteSession($event, session.id)"
+              style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px;line-height:1;border-radius:4px;"
+              title="Delete"
+            ><i class="bi bi-x"></i></button>
           </div>
-          <button
-            class="session-delete"
-            (click)="deleteSession($event, session.id)"
-            style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px;line-height:1;border-radius:4px;"
-            title="Delete"
-          ><i class="bi bi-x"></i></button>
-        </div>
-      } @empty {
-        <div style="text-align:center;padding:32px 16px;color:var(--text-sidebar-muted);font-size:13px;">
-          No sessions yet
-        </div>
-      }
-    </div>
+        } @empty {
+          <div style="text-align:center;padding:32px 16px;color:var(--text-sidebar-muted);font-size:13px;">
+            No sessions yet
+          </div>
+        }
+      </div>
+    }
+
+    @if (sidebarView() === 'tasks') {
+      <!-- Tasks list -->
+      <div class="flex-grow-1 overflow-auto" style="padding:4px 8px;">
+        @if (loadingTasks()) {
+          <div style="text-align:center;padding:24px;color:var(--text-sidebar-muted);font-size:12px;">Loading...</div>
+        } @else {
+          @for (task of backgroundTasks(); track task.id) {
+            <div
+              class="session-item"
+              style="padding:10px 12px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;gap:6px;border-left:2px solid;"
+              [style.borderLeftColor]="task.enabled ? 'var(--success)' : 'var(--text-sidebar-muted)'"
+            >
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:500;color:var(--text-sidebar);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
+                  {{ task.name }}
+                </div>
+                <div style="font-size:10px;color:var(--text-sidebar-muted);margin-top:2px;">
+                  {{ task.toolName }} · {{ task.schedule }}
+                </div>
+                @if (task.lastError) {
+                  <div style="font-size:10px;color:var(--danger);margin-top:1px;">{{ task.lastError.slice(0, 60) }}</div>
+                }
+              </div>
+              <div style="display:flex;gap:4px;flex-shrink:0;">
+                <button
+                  (click)="toggleTask(task)"
+                  style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px;border-radius:4px;color:var(--success);"
+                  [style]="task.enabled ? '' : 'color:var(--text-sidebar-muted);'"
+                  [title]="task.enabled ? 'Pause' : 'Resume'"
+                ><i class="bi" [class.bi-pause-fill]="task.enabled" [class.bi-play-fill]="!task.enabled"></i></button>
+                <button
+                  class="session-delete"
+                  (click)="deleteBgTask($event, task)"
+                  style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px;line-height:1;border-radius:4px;"
+                  title="Delete"
+                ><i class="bi bi-x"></i></button>
+              </div>
+            </div>
+          } @empty {
+            <div style="text-align:center;padding:32px 16px;color:var(--text-sidebar-muted);font-size:12px;line-height:1.6;">
+              <i class="bi bi-clock" style="font-size:24px;display:block;margin-bottom:8px;opacity:.5;"></i>
+              No scheduled tasks<br>
+              <span style="font-size:11px;">Ask the agent to schedule one.</span>
+            </div>
+          }
+        }
+      </div>
+    }
 
     <!-- Sidebar footer -->
-    <div style="padding:10px 12px;border-top:1px solid var(--glass-border);font-size:11px;color:var(--text-sidebar-muted);display:flex;align-items:center;gap:6px;">
-      <span class="status-dot"></span>
-      Ollama connected
+    <div style="padding:10px 12px;border-top:1px solid var(--glass-border);font-size:11px;color:var(--text-sidebar-muted);display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="status-dot"></span>
+        Ollama
+      </div>
+      <span style="font-size:10px;color:var(--text-sidebar-muted);">
+        @if (sidebarView() === 'sessions') { {{ sessions().length }} sessions }
+        @if (sidebarView() === 'tasks') { {{ backgroundTasks().length }} tasks }
+      </span>
     </div>
   </aside>
 

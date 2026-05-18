@@ -18,6 +18,21 @@ export interface Message {
   createdAt: string
 }
 
+export interface BackgroundTask {
+  id: string
+  sessionId: string
+  name: string
+  schedule: string
+  toolName: string
+  toolArgs: string
+  enabled: boolean
+  lastRunAt: string | null
+  nextRunAt: string | null
+  lastResult: string | null
+  lastError: string | null
+  createdAt: string
+}
+
 export interface StreamChunk {
   type: 'text' | 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error' | 'done' | 'error'
   content?: string
@@ -73,6 +88,18 @@ export class ChatService {
 
   editMessage(sessionId: string, msgId: string, content: string) {
     return this.http.patch<Message[]>(`/api/sessions/${sessionId}/messages/${msgId}`, { content })
+  }
+
+  getBackgroundTasks() {
+    return this.http.get<BackgroundTask[]>('/api/background-tasks')
+  }
+
+  deleteBackgroundTask(id: string) {
+    return this.http.delete(`/api/background-tasks/${id}`)
+  }
+
+  toggleBackgroundTask(id: string, enabled: boolean) {
+    return this.http.patch(`/api/background-tasks/${id}`, { enabled })
   }
 
   uploadFile(sessionId: string, file: File): Observable<Message> {
