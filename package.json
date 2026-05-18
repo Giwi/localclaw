@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build:server": "tsc",
-    "build:client": "cd client && ng build",
+    "build:client": "npm --prefix client run build",
     "start": "node dist/index.js",
     "setup:opencode": "node scripts/setup-opencode.js"
   },
