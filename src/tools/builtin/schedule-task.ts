@@ -49,7 +49,14 @@ Examples:
         const name = args.name as string
         const schedule = args.schedule as string
         const tool = args.tool as string
-        const toolArgs = args.args as string || '{}'
+        let toolArgs: string
+        if (typeof args.args === 'string') {
+          toolArgs = args.args || '{}'
+        } else if (args.args && typeof args.args === 'object') {
+          toolArgs = JSON.stringify(args.args)
+        } else {
+          toolArgs = '{}'
+        }
 
         if (!name) return 'Please provide a "name" for the task.'
         if (!schedule) return 'Please provide a "schedule" (e.g. "every 24h", "daily at 08:00").'

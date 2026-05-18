@@ -90,11 +90,13 @@ export class ToolRegistry {
     }
 
     const jsCode = raw.replace(/\{\{args\}\}/g, escaped)
+    // Wrap in IIFE to avoid global scope conflicts (e.g. `const location`)
+    const wrappedCode = `(function(){${jsCode}\n})()`
     if (useSandbox) {
-      const cmd = wrapCommand(`node -e "${raw.replace(/"/g, '\\"').replace(/\n/g, ';')}"`)
+      const cmd = wrapCommand(`node -e "${wrappedCode.replace(/"/g, '\\"').replace(/\n/g, ';')}"`)
       return execSync(cmd, { encoding: 'utf-8', timeout: 30000, shell: '/bin/bash' }).trim()
     }
-    return execFileSync('node', ['-e', jsCode], { encoding: 'utf-8', timeout: 30000 }).trim()
+    return execFileSync('node', ['-e', wrappedCode], { encoding: 'utf-8', timeout: 30000 }).trim()
   }
 
   private createToolDefinition: ToolModule = {
