@@ -1,4 +1,19 @@
 <div class="d-flex" style="height: 100dvh;">
+
+  <!-- Toasts -->
+  <div style="position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;">
+    @for (toast of toasts(); track toast.id) {
+      <div
+        style="pointer-events:auto;padding:12px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;animation:fadeIn .25s ease;max-width:360px;cursor:pointer;"
+        [style]="toast.type === 'error' ? 'background:#ef4444;color:#fff;' : toast.type === 'success' ? 'background:#22c55e;color:#fff;' : 'background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border-color);'"
+        (click)="removeToast(toast.id)"
+      >
+        <i class="bi" [class.bi-x-circle]="toast.type === 'error'" [class.bi-check-circle]="toast.type === 'success'" [class.bi-info-circle]="toast.type === 'info'"></i>
+        {{ toast.message }}
+      </div>
+    }
+  </div>
+
   <!-- Sidebar -->
   <aside
     class="d-flex flex-column flex-shrink-0 sidebar-glass"
@@ -29,18 +44,44 @@
     </div>
 
     <!-- Session list -->
-    <div class="flex-grow-1 overflow-auto" style="padding:4px 8px;">
-      @for (session of sessions(); track session.id) {
+    <div
+      #sessionList
+      class="flex-grow-1 overflow-auto"
+      style="padding:4px 8px;"
+      tabindex="0"
+      (keydown)="onSessionKeydown($event)"
+      role="listbox"
+      aria-label="Session list"
+    >
+      @for (session of sessions(); track session.id; let i = $index) {
         <div
           class="session-item sidebar-item"
           [class.active]="currentSession()?.id === session.id"
+          [class.keyboard-selected]="selectedSessionIndex() === i && currentSession()?.id !== session.id"
           (click)="selectSession(session)"
+          (dblclick)="startRename(session)"
+          role="option"
+          [attr.aria-selected]="currentSession()?.id === session.id"
+          tabindex="-1"
           style="padding:10px 12px;border-radius:var(--radius-sm);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;"
         >
           <div class="text-truncate" style="flex:1;min-width:0;">
-            <div style="font-size:13px;font-weight:500;color:var(--text-sidebar);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
-              {{ session.name }}
-            </div>
+            @if (renamingId() === session.id) {
+              <input
+                [ngModel]="renameInput()"
+                (ngModelChange)="renameInput.set($event)"
+                (keydown.enter)="commitRename(session)"
+                (keydown.escape)="cancelRename()"
+                (blur)="commitRename(session)"
+                (click)="$event.stopPropagation()"
+                style="width:100%;padding:4px 8px;font-size:13px;border-radius:4px;border:1px solid var(--accent);background:var(--bg-primary);color:var(--text-primary);outline:none;"
+                autofocus
+              />
+            } @else {
+              <div style="font-size:13px;font-weight:500;color:var(--text-sidebar);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
+                {{ session.name }}
+              </div>
+            }
             <div style="font-size:11px;color:var(--text-sidebar-muted);margin-top:2px;">
               {{ session.model.replace('ollama/', '') }}
             </div>
@@ -88,7 +129,7 @@
           </span>
         </div>
         <div class="d-flex align-items-center gap-2">
-          <button (click)="renameSession(session)" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Rename"><i class="bi bi-pencil"></i></button>
+          <button (click)="startRename(session)" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Rename"><i class="bi bi-pencil"></i></button>
           <button (click)="deleteCurrent()" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Delete session"><i class="bi bi-trash"></i></button>
         </div>
       </header>
@@ -159,8 +200,23 @@
                     <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'"><i class="bi bi-chevron-right"></i></span>
                   </div>
                   @if (ev.expanded && ev.toolResult) {
-                    <div class="tool-card-body" style="color:#9ca3af;border-color:rgba(255,255,255,.08);">
-                      {{ ev.toolResult }}
+                    <div class="tool-card-body" style="color:#9ca3af;border-color:rgba(255,255,255,.08);position:relative;">
+                      <div style="display:flex;justify-content:flex-end;margin-bottom:4px;">
+                        <button
+                          (click)="copyText(ev.toolResult!)"
+                          style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;transition:background .15s;"
+                          title="Copy result"
+                        ><i class="bi bi-clipboard"></i></button>
+                      </div>
+                      @if (!ev.expandedMore && hasMoreLines(ev.toolResult)) {
+                        <div>{{ truncateResult(ev.toolResult) }}</div>
+                        <button
+                          (click)="ev.expandedMore = true; $event.stopPropagation()"
+                          style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;padding:4px 0;width:100%;text-align:center;"
+                        >Show all ({{ ev.toolResult.split('\n').length }} lines)</button>
+                      } @else {
+                        <div>{{ ev.toolResult }}</div>
+                      }
                     </div>
                   }
                 }

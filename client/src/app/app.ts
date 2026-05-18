@@ -5,11 +5,18 @@ import { Subscription } from 'rxjs'
 import { ChatService, type Session, type Message } from './chat.service'
 import { MarkdownPipe } from './markdown.pipe'
 
+export interface Toast {
+  id: string
+  message: string
+  type: 'success' | 'error' | 'info'
+}
+
 export interface ToolEvent {
   id: string
   type: 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error'
   toolName: string
   expanded: boolean
+  expandedMore?: boolean
   toolArgs?: Record<string, any>
   toolResult?: string
   content?: string
@@ -33,11 +40,16 @@ export class App implements OnInit, OnDestroy {
   currentTheme = signal('light')
   sidebarOpen = signal(true)
   editingMsg = signal<string | null>(null)
+  toasts = signal<Toast[]>([])
+  renamingId = signal<string | null>(null)
+  renameInput = signal('')
+  selectedSessionIndex = signal(0)
 
   private chatSubscription: Subscription | null = null
   private loadingTimeout: ReturnType<typeof setTimeout> | null = null
 
   chatContainer = viewChild<ElementRef>('chatContainer')
+  sessionListEl = viewChild<ElementRef>('sessionList')
 
   ngOnInit() {
     const saved = localStorage.getItem('localclaw-theme')
@@ -53,6 +65,16 @@ export class App implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.chatSubscription?.unsubscribe()
     if (this.loadingTimeout) clearTimeout(this.loadingTimeout)
+  }
+
+  showToast(message: string, type: Toast['type'] = 'info') {
+    const id = crypto.randomUUID()
+    this.toasts.update((t) => [...t, { id, message, type }])
+    setTimeout(() => this.removeToast(id), 4000)
+  }
+
+  removeToast(id: string) {
+    this.toasts.update((t) => t.filter((x) => x.id !== id))
   }
 
   toggleSidebar() {
@@ -75,11 +97,14 @@ export class App implements OnInit, OnDestroy {
   }
 
   loadSessions() {
-    this.api.getSessions().subscribe((s) => {
-      this.sessions.set(s)
-      if (s.length > 0 && !this.currentSession()) {
-        this.selectSession(s[0])
-      }
+    this.api.getSessions().subscribe({
+      next: (s) => {
+        this.sessions.set(s)
+        if (s.length > 0 && !this.currentSession()) {
+          this.selectSession(s[0])
+        }
+      },
+      error: () => this.showToast('Failed to load sessions', 'error'),
     })
   }
 
@@ -88,15 +113,22 @@ export class App implements OnInit, OnDestroy {
     this.chatSubscription = null
     this.currentSession.set(session)
     this.toolEvents.set([])
-    this.api.getMessages(session.id).subscribe((msgs) => {
-      this.messages.set(msgs)
+    this.api.getMessages(session.id).subscribe({
+      next: (msgs) => this.messages.set(msgs),
+      error: () => this.showToast('Failed to load messages', 'error'),
     })
+    const idx = this.sessions().findIndex((s) => s.id === session.id)
+    if (idx >= 0) this.selectedSessionIndex.set(idx)
   }
 
   newSession() {
-    this.api.createSession().subscribe((s) => {
-      this.sessions.update((list) => [s, ...list])
-      this.selectSession(s)
+    this.api.createSession().subscribe({
+      next: (s) => {
+        this.sessions.update((list) => [s, ...list])
+        this.selectSession(s)
+        this.showToast('Session created', 'success')
+      },
+      error: () => this.showToast('Failed to create session', 'error'),
     })
   }
 
@@ -104,38 +136,88 @@ export class App implements OnInit, OnDestroy {
     e?.stopPropagation()
     const s = this.currentSession()
     if (!s) return
-    this.api.deleteSession(s.id).subscribe(() => {
-      this.sessions.update((list) => list.filter((x) => x.id !== s.id))
-      const remaining = this.sessions()
-      if (remaining.length > 0) {
-        this.selectSession(remaining[0])
-      } else {
-        this.currentSession.set(null)
-        this.messages.set([])
-        this.toolEvents.set([])
-      }
+    this.api.deleteSession(s.id).subscribe({
+      next: () => {
+        this.sessions.update((list) => list.filter((x) => x.id !== s.id))
+        this.showToast('Session deleted', 'info')
+        const remaining = this.sessions()
+        if (remaining.length > 0) {
+          this.selectSession(remaining[0])
+        } else {
+          this.currentSession.set(null)
+          this.messages.set([])
+          this.toolEvents.set([])
+        }
+      },
+      error: () => this.showToast('Failed to delete session', 'error'),
     })
   }
 
   deleteSession(e: Event, id: string) {
     e.stopPropagation()
-    this.api.deleteSession(id).subscribe(() => {
-      this.sessions.update((list) => list.filter((x) => x.id !== id))
-      if (this.currentSession()?.id === id) {
-        const remaining = this.sessions()
-        if (remaining.length > 0) this.selectSession(remaining[0])
-        else { this.currentSession.set(null); this.messages.set([]); this.toolEvents.set([]) }
-      }
+    this.api.deleteSession(id).subscribe({
+      next: () => {
+        this.sessions.update((list) => list.filter((x) => x.id !== id))
+        this.showToast('Session deleted', 'info')
+        if (this.currentSession()?.id === id) {
+          const remaining = this.sessions()
+          if (remaining.length > 0) this.selectSession(remaining[0])
+          else { this.currentSession.set(null); this.messages.set([]); this.toolEvents.set([]) }
+        }
+      },
+      error: () => this.showToast('Failed to delete session', 'error'),
     })
   }
 
-  renameSession(session: Session) {
-    const name = prompt('Session name:', session.name)
+  startRename(session: Session) {
+    this.renamingId.set(session.id)
+    this.renameInput.set(session.name)
+  }
+
+  commitRename(session: Session) {
+    const name = this.renameInput().trim()
+    this.renamingId.set(null)
     if (name && name !== session.name) {
-      this.api.renameSession(session.id, name).subscribe((updated) => {
-        this.sessions.update((list) => list.map((s) => (s.id === updated.id ? updated : s)))
-        if (this.currentSession()?.id === updated.id) this.currentSession.set(updated)
+      this.api.renameSession(session.id, name).subscribe({
+        next: (updated) => {
+          this.sessions.update((list) => list.map((s) => (s.id === updated.id ? updated : s)))
+          if (this.currentSession()?.id === updated.id) this.currentSession.set(updated)
+          this.showToast('Session renamed', 'success')
+        },
+        error: () => this.showToast('Failed to rename session', 'error'),
       })
+    }
+  }
+
+  cancelRename() {
+    this.renamingId.set(null)
+  }
+
+  onSessionKeydown(e: KeyboardEvent) {
+    const list = this.sessions()
+    if (list.length === 0) return
+    let idx = this.selectedSessionIndex()
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      idx = (idx + 1) % list.length
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      idx = (idx - 1 + list.length) % list.length
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      this.selectSession(list[idx])
+      return
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault()
+      const target = list[idx]
+      if (target) this.deleteSession(e as unknown as Event, target.id)
+      return
+    }
+    this.selectedSessionIndex.set(idx)
+    const el = this.sessionListEl()?.nativeElement
+    if (el) {
+      const child = el.children[idx] as HTMLElement
+      child?.focus()
     }
   }
 
@@ -144,9 +226,13 @@ export class App implements OnInit, OnDestroy {
     const file = target.files?.[0]
     const session = this.currentSession()
     if (!file || !session) return
-    this.api.uploadFile(session.id, file).subscribe((msg) => {
-      this.messages.update((m) => [...m, msg])
-      this.scrollDown()
+    this.api.uploadFile(session.id, file).subscribe({
+      next: (msg) => {
+        this.messages.update((m) => [...m, msg])
+        this.scrollDown()
+        this.showToast('File uploaded', 'success')
+      },
+      error: () => this.showToast('Failed to upload file', 'error'),
     })
     target.value = ''
   }
@@ -179,10 +265,11 @@ export class App implements OnInit, OnDestroy {
     this.chatSubscription?.unsubscribe()
 
     if (editId) {
-      this.api.editMessage(session.id, editId, text).subscribe(() => {
-        this.api.getMessages(session.id).subscribe((msgs) => {
-          this.messages.set(msgs)
-        })
+      this.api.editMessage(session.id, editId, text).subscribe({
+        next: () => {
+          this.api.getMessages(session.id).subscribe((msgs) => this.messages.set(msgs))
+        },
+        error: () => this.showToast('Failed to edit message', 'error'),
       })
     } else {
       const userMsg: Message = {
@@ -202,6 +289,7 @@ export class App implements OnInit, OnDestroy {
       this.loading.set(false)
       this.chatSubscription = null
       this.api.cancelChat()
+      this.showToast('Request timed out', 'error')
     }, 120_000)
 
     const done = () => {
@@ -280,9 +368,9 @@ export class App implements OnInit, OnDestroy {
           })
         }
         if (chunk.type === 'done') { done() }
-        if (chunk.type === 'error') { console.error(chunk.error); done() }
+        if (chunk.type === 'error') { this.showToast(chunk.error || 'Chat error', 'error'); done() }
       },
-      error: () => { done() },
+      error: () => { this.showToast('Connection lost', 'error'); done() },
     })
   }
 
@@ -299,5 +387,24 @@ export class App implements OnInit, OnDestroy {
 
   formatDate(date: string) {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
+  truncateResult(text: string, maxLines = 8): string {
+    const lines = text.split('\n')
+    if (lines.length <= maxLines) return text
+    return lines.slice(0, maxLines).join('\n') + `\n... (${lines.length - maxLines} more lines)`
+  }
+
+  hasMoreLines(text: string, maxLines = 8): boolean {
+    return text.split('\n').length > maxLines
+  }
+
+  async copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      this.showToast('Copied to clipboard', 'success')
+    } catch {
+      this.showToast('Failed to copy', 'error')
+    }
   }
 }

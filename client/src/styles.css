@@ -382,3 +382,51 @@ body {
   transition: opacity var(--transition);
 }
 .session-item:hover .session-delete { opacity: 1; }
+
+/* ── Keyboard selected ── */
+.keyboard-selected {
+  background: var(--bg-sidebar-hover) !important;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ── Mobile responsive ── */
+@media (max-width: 768px) {
+  aside[style*="sidebar"] {
+    position: fixed !important;
+    top: 0; left: 0;
+    height: 100dvh !important;
+    z-index: 1000;
+    width: 280px !important;
+    min-width: 280px !important;
+  }
+  aside[style*="sidebar"]:not([style*="width:280px"]) {
+    width: 0px !important;
+    min-width: 0px !important;
+  }
+  .sidebar-backdrop {
+    display: block !important;
+  }
+  main header {
+    padding-left: 52px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .message-content {
+    font-size: 14px !important;
+  }
+  .message-content pre {
+    font-size: 12px !important;
+    padding: 10px !important;
+  }
+  [style*="max-width: 800px"] {
+    max-width: 100% !important;
+  }
+  [style*="max-width: 75%"] {
+    max-width: 90% !important;
+  }
+  header > div:first-child {
+    max-width: 55% !important;
+  }
+}
