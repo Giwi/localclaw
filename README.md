@@ -259,10 +259,10 @@ Authorization: Bearer <your-api-key>
 | `GET` | `/api/sessions/:id/messages` | Get messages |
 | `PATCH` | `/api/sessions/:id/messages/:msgId` | Edit message (truncates conversation after it) |
 | `POST` | `/api/sessions/:id/upload` | Upload file (txt/pdf/docx) for chat context |
-| `GET` | `/api/background-tasks` | List background tasks (optional `?session_id=...`) |
+| `GET` | `/api/background-tasks` | List background tasks (used by the UI Tasks tab) |
 | `GET` | `/api/background-tasks/:id` | Get a background task |
 | `DELETE` | `/api/background-tasks/:id` | Delete a background task |
-| `PATCH` | `/api/background-tasks/:id` | Enable/disable a background task |
+| `PATCH` | `/api/background-tasks/:id` | Enable/disable (pause/resume) a background task |
 | `GET` | `/api/knowledge` | List uploaded knowledge documents |
 | `DELETE` | `/api/knowledge/:id` | Delete a knowledge document |
 
@@ -350,4 +350,10 @@ Angular 20 single-page application (signals-based) with:
 - Message editing — edit any user message, conversation is truncated after the edit point
 - File upload — attach text/PDF/docx files via paperclip icon, content extracted and added as user message
 - Session management — create, rename, delete sessions
+- Background task management — list, pause/resume, and delete scheduled tasks in a dedicated Tasks tab
+- Toast notifications for errors and confirmations
+- Copy button on code blocks and tool results
+- Inline session rename (double-click or pencil icon)
+- Keyboard navigation in sidebar sessions (arrow keys, Enter, Delete)
+- Mobile responsive layout
 - 120s timeout fallback to reset loading state if no response received
