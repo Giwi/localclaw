@@ -96,19 +96,35 @@ export class BackgroundScheduler {
     }
 
     const now = new Date()
-    const nextRun = getNextRun(task.schedule)
+    let nextRun: Date
+    let newRetries = task.retries
+
+    if (error && task.retries < task.maxRetries) {
+      // Exponential backoff: 1min, 5min, 15min, 30min, 60min...
+      const backoffMinutes = [1, 5, 15, 30, 60][Math.min(task.retries, 4)]
+      nextRun = new Date(now.getTime() + backoffMinutes * 60 * 1000)
+      newRetries = task.retries + 1
+      log.agent(`Scheduler: task "${task.name}" will retry in ${backoffMinutes}min (attempt ${newRetries}/${task.maxRetries})`)
+    } else {
+      nextRun = getNextRun(task.schedule)
+      newRetries = 0
+    }
 
     updateBackgroundTask(this.db, task.id, {
       lastRunAt: now.toISOString(),
       lastResult: result || null,
       lastError: error,
       nextRunAt: nextRun.toISOString(),
+      retries: newRetries,
     })
 
     const session = getSession(this.db, task.sessionId)
-    if (session) {
+    if (session && (error || result)) {
       const status = error ? 'failed' : 'completed'
-      const msgContent = `[Background task "${task.name}" ${status} at ${now.toLocaleTimeString()}]\n${error ? `Error: ${error}` : `Result: ${result.slice(0, 1000)}`}`
+      const retryNote = error && task.retries < task.maxRetries
+        ? ` (retry ${task.retries + 1}/${task.maxRetries} in ${((nextRun.getTime() - now.getTime()) / 60000).toFixed(0)}min)`
+        : ''
+      const msgContent = `[Background task "${task.name}" ${status} at ${now.toLocaleTimeString()}]${retryNote}\n${error ? `Error: ${error}` : `Result: ${result!.slice(0, 1000)}`}`
       addMessage(this.db, { sessionId: task.sessionId, role: 'system', content: msgContent })
       log.agent(`Scheduler: stored result for session ${task.sessionId.slice(0, 8)}`)
     }

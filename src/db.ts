@@ -67,6 +67,8 @@ export function openDb(dataDir: string): BetterSqlite3.Database {
       next_run_at TEXT,
       last_result TEXT,
       last_error TEXT,
+      retries INTEGER NOT NULL DEFAULT 0,
+      max_retries INTEGER NOT NULL DEFAULT 3,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
@@ -227,7 +229,7 @@ export function searchMemories(db: BetterSqlite3.Database, sessionId: string, qu
 
 export function createBackgroundTask(
   db: BetterSqlite3.Database,
-  task: Omit<BackgroundTask, 'id' | 'createdAt' | 'lastRunAt' | 'lastResult' | 'lastError'>
+  task: Omit<BackgroundTask, 'id' | 'createdAt' | 'lastRunAt' | 'lastResult' | 'lastError' | 'retries' | 'maxRetries'>
 ): BackgroundTask {
   const id = crypto.randomUUID()
   const createdAt = new Date().toISOString()
@@ -235,7 +237,7 @@ export function createBackgroundTask(
     `INSERT INTO background_tasks (id, session_id, name, schedule, tool_name, tool_args, enabled, next_run_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(id, task.sessionId, task.name, task.schedule, task.toolName, task.toolArgs, task.enabled ? 1 : 0, task.nextRunAt || null, createdAt)
-  return { ...task, id, createdAt, lastRunAt: null, lastResult: null, lastError: null }
+  return { ...task, id, createdAt, lastRunAt: null, lastResult: null, lastError: null, retries: 0, maxRetries: 3 }
 }
 
 export function listBackgroundTasks(db: BetterSqlite3.Database, sessionId?: string): BackgroundTask[] {
@@ -253,7 +255,7 @@ export function getBackgroundTask(db: BetterSqlite3.Database, id: string): Backg
   return row ? mapBackgroundTask(row as any) : null
 }
 
-export function updateBackgroundTask(db: BetterSqlite3.Database, id: string, updates: Partial<Pick<BackgroundTask, 'lastRunAt' | 'lastResult' | 'lastError' | 'nextRunAt' | 'enabled'>>): void {
+export function updateBackgroundTask(db: BetterSqlite3.Database, id: string, updates: Partial<Pick<BackgroundTask, 'lastRunAt' | 'lastResult' | 'lastError' | 'nextRunAt' | 'enabled' | 'retries' | 'maxRetries'>>): void {
   const sets: string[] = []
   const vals: any[] = []
   if (updates.lastRunAt !== undefined) { sets.push('last_run_at = ?'); vals.push(updates.lastRunAt) }
@@ -261,6 +263,8 @@ export function updateBackgroundTask(db: BetterSqlite3.Database, id: string, upd
   if (updates.lastError !== undefined) { sets.push('last_error = ?'); vals.push(updates.lastError) }
   if (updates.nextRunAt !== undefined) { sets.push('next_run_at = ?'); vals.push(updates.nextRunAt) }
   if (updates.enabled !== undefined) { sets.push('enabled = ?'); vals.push(updates.enabled ? 1 : 0) }
+  if (updates.retries !== undefined) { sets.push('retries = ?'); vals.push(updates.retries) }
+  if (updates.maxRetries !== undefined) { sets.push('max_retries = ?'); vals.push(updates.maxRetries) }
   if (sets.length === 0) return
   vals.push(id)
   db.prepare(`UPDATE background_tasks SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
@@ -290,6 +294,8 @@ function mapBackgroundTask(row: any): BackgroundTask {
     nextRunAt: row.next_run_at,
     lastResult: row.last_result,
     lastError: row.last_error,
+    retries: row.retries ?? 0,
+    maxRetries: row.max_retries ?? 3,
     createdAt: row.created_at,
   }
 }

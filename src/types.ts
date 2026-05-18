@@ -31,6 +31,8 @@ export interface BackgroundTask {
   nextRunAt: string | null
   lastResult: string | null
   lastError: string | null
+  retries: number
+  maxRetries: number
   createdAt: string
 }
 
