@@ -3,7 +3,7 @@ import type { ToolDefinition } from './tools/types.js'
 import type Database from 'better-sqlite3'
 import { ToolRegistry } from './tools/registry.js'
 import { log } from './log.js'
-import { storeMemory, searchMemories, searchKnowledge } from './db.js'
+import { storeMemory, searchMemories, searchKnowledge, addToolCall } from './db.js'
 import { embed } from './embeddings.js'
 
 const OLLAMA_BASE = process.env.LOCALCLAW_OLLAMA_URL || 'http://localhost:11434'
@@ -341,8 +341,8 @@ export class Agent {
         log.agent(`Calling tool ${toolName}`)
         yield { type: 'tool_start', toolName, toolRunId, toolArgs: args }
 
+        const t1 = Date.now()
         try {
-          const t1 = Date.now()
           const chunkQueue: string[] = []
           const onChunk = (chunk: string) => { chunkQueue.push(chunk) }
           const toolArgs = sessionId ? { ...args, _sessionId: sessionId } : args
@@ -386,11 +386,26 @@ export class Agent {
               storeMemory(this.db, sessionId, `[${toolName}] ${result.slice(0, 500)}`, emb)
             } catch { /* skip memory storage on failure */ }
           }
+
+          addToolCall(this.db, {
+            sessionId: sessionId || null,
+            toolName,
+            toolArgs: JSON.stringify(args),
+            toolResult: result,
+            durationMs: Date.now() - t1,
+          })
         } catch (err: any) {
           log.agent(`Tool ${toolName} FAILED: ${err.message}`)
           yield { type: 'tool_error', toolName, toolRunId, error: err.message }
           lastToolResult = `Error: ${err.message}`
           apiMessages.push({ role: 'tool', content: `Error: ${err.message}` })
+          addToolCall(this.db, {
+            sessionId: sessionId || null,
+            toolName,
+            toolArgs: JSON.stringify(args),
+            toolError: err.message,
+            durationMs: Date.now() - t1,
+          })
         }
       }
     }

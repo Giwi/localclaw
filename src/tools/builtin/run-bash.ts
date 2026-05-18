@@ -2,6 +2,30 @@ import { spawn } from 'child_process'
 import type { ToolModule } from '../types.js'
 import { wrapCommand, isSandboxAvailable } from '../sandbox.js'
 
+const BLOCKED_PATTERNS = [
+  /\brm\s+-rf\s+[\/~]\s*$/,
+  /\brm\s+-rf\s+[\/~]\b.*\b(?!\/)/,
+  /\brm\s+-rf\s+\/\s*$/,
+  /\bmkfs\b/,
+  /\bdd\s+if=/,
+  /\b>:\)/,
+  /\b:\(\)\s*\{/,
+  /\bchmod\s+-R\s+000\s+\//,
+  /\bdestroy\s+--all\b/,
+  /\bpasswd\b/,
+  /\bwget\s+.*\||\bcurl\s+.*\|/,
+  />\s*\/dev\/sda/,
+]
+
+function isBlocked(cmd: string): string | null {
+  for (const pattern of BLOCKED_PATTERNS) {
+    if (pattern.test(cmd)) {
+      return `Command blocked: pattern "${pattern}" matches a potentially destructive operation.`
+    }
+  }
+  return null
+}
+
 export const runBashTool: ToolModule = {
   definition: {
     name: 'run_bash',
@@ -22,6 +46,9 @@ export const runBashTool: ToolModule = {
     if (!command.trim()) {
       return 'Please specify a "command" parameter with the bash command to run.'
     }
+
+    const blocked = isBlocked(command)
+    if (blocked) return blocked
 
     const cmd = isSandboxAvailable() ? wrapCommand(command) : command
 

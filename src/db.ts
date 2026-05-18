@@ -90,6 +90,17 @@ export function openDb(dataDir: string): BetterSqlite3.Database {
     CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_doc ON knowledge_chunks(document_id);
     CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(content, session_id UNINDEXED);
     CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(content, document_id UNINDEXED);
+    CREATE TABLE IF NOT EXISTS tool_calls (
+      id TEXT PRIMARY KEY,
+      session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+      tool_name TEXT NOT NULL,
+      tool_args TEXT NOT NULL DEFAULT '{}',
+      tool_result TEXT,
+      tool_error TEXT,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id, created_at);
   `)
 
   log.debug('Database schema ready')
@@ -136,6 +147,21 @@ export function deleteMessagesAfter(db: BetterSqlite3.Database, sessionId: strin
   const msg = db.prepare('SELECT created_at FROM messages WHERE id = ?').get(messageId) as { created_at: string } | undefined
   if (!msg) return
   db.prepare('DELETE FROM messages WHERE session_id = ? AND created_at > ?').run(sessionId, msg.created_at)
+}
+
+export function addToolCall(db: BetterSqlite3.Database, call: {
+  sessionId: string | null
+  toolName: string
+  toolArgs: string
+  toolResult?: string
+  toolError?: string
+  durationMs: number
+}): void {
+  const id = crypto.randomUUID()
+  db.prepare(
+    `INSERT INTO tool_calls (id, session_id, tool_name, tool_args, tool_result, tool_error, duration_ms, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, call.sessionId, call.toolName, call.toolArgs, call.toolResult || null, call.toolError || null, call.durationMs, new Date().toISOString())
 }
 
 export function addMessage(

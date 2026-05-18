@@ -1,9 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { execSync } from 'child_process'
-import type { ExecSyncOptions } from 'child_process'
-
-const EXEC_OPTS = { encoding: 'utf-8' as const, timeout: 30000, shell: '/bin/bash' }
+import { execSync, execFileSync } from 'child_process'
 import type { ToolDefinition, ToolModule } from './types.js'
 import { readFileTool } from './builtin/read-file.js'
 import { writeFileTool } from './builtin/write-file.js'
@@ -70,27 +67,34 @@ export class ToolRegistry {
     const useSandbox = isSandboxAvailable()
 
     if (def.language === 'python') {
-      const script = raw.includes('{{args}}') ? raw.replace('{{args}}', escaped) : `${raw}\n\nimport json, sys\n_args = json.loads('${escaped.replace(/'/g, "\\'")}')\nprint(main(_args) if 'main' in dir() else _args)`
       const tmp = path.join(this.toolsDir, `_run_${Date.now()}.py`)
       try {
-        fs.writeFileSync(tmp, `${raw}\n\nimport json\n_args = json.loads("""${escaped.replace(/"/g, '\\"')}""")\nprint(main(_args))`)
-        const cmd = useSandbox ? wrapCommand(`python3 /tmp/_run_${path.basename(tmp)}`, this.toolsDir) : `python3 "${tmp}"`
-      return (execSync(cmd, EXEC_OPTS) as string).trim()
-    } finally {
-      try { fs.unlinkSync(tmp) } catch {}
+        const wrapper = raw.includes('{{args}}')
+          ? raw.replace('{{args}}', escaped)
+          : `${raw}\n\nimport json\n_args = json.loads("""${escaped.replace(/"/g, '\\"')}""")\nprint(main(_args))`
+        fs.writeFileSync(tmp, wrapper)
+        if (useSandbox) {
+          const cmd = wrapCommand(`python3 /tmp/_run_${path.basename(tmp)}`, this.toolsDir)
+          return execSync(cmd, { encoding: 'utf-8', timeout: 30000, shell: '/bin/bash' }).trim()
+        }
+        return execFileSync('python3', [tmp], { encoding: 'utf-8', timeout: 30000 }).trim()
+      } finally {
+        try { fs.unlinkSync(tmp) } catch {}
+      }
     }
-  }
 
-  if (def.language === 'bash') {
-    const script = raw.replace(/\{\{args\}\}/g, escaped)
-    const cmd = useSandbox ? wrapCommand(script) : script
-    return (execSync(cmd, EXEC_OPTS) as string).trim()
+    if (def.language === 'bash') {
+      const script = raw.replace(/\{\{args\}\}/g, escaped)
+      const cmd = useSandbox ? wrapCommand(script) : script
+      return execSync(cmd, { encoding: 'utf-8', timeout: 30000, shell: '/bin/bash' }).trim()
     }
 
-    const jsScript = useSandbox
-      ? wrapCommand(`node -e "${raw.replace(/"/g, '\\"').replace(/\n/g, ';')}"`)
-      : `node -e "${raw.replace(/"/g, '\\"').replace(/\n/g, ';')}"`
-      return (execSync(jsScript, EXEC_OPTS) as string).trim()
+    const jsCode = raw.replace(/\{\{args\}\}/g, escaped)
+    if (useSandbox) {
+      const cmd = wrapCommand(`node -e "${raw.replace(/"/g, '\\"').replace(/\n/g, ';')}"`)
+      return execSync(cmd, { encoding: 'utf-8', timeout: 30000, shell: '/bin/bash' }).trim()
+    }
+    return execFileSync('node', ['-e', jsCode], { encoding: 'utf-8', timeout: 30000 }).trim()
   }
 
   private createToolDefinition: ToolModule = {
