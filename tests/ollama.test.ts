@@ -15,7 +15,7 @@ describe('chatOnce', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { chatOnce } = await import('./ollama.js')
+    const { chatOnce } = await import('../src/ollama.js')
     const result = await chatOnce('ollama/qwen2.5:3b', [{ role: 'user', content: 'hi' }])
 
     expect(result).toBe('Hello!')
@@ -35,7 +35,7 @@ describe('chatOnce', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { chatOnce } = await import('./ollama.js')
+    const { chatOnce } = await import('../src/ollama.js')
     await chatOnce('ollama/llama3.2:3b', [])
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.model).toBe('llama3.2:3b')
@@ -48,7 +48,7 @@ describe('chatOnce', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { chatOnce } = await import('./ollama.js')
+    const { chatOnce } = await import('../src/ollama.js')
     await chatOnce('qwen2.5:3b', [])
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.model).toBe('qwen2.5:3b')
@@ -62,7 +62,7 @@ describe('chatOnce', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { chatOnce } = await import('./ollama.js')
+    const { chatOnce } = await import('../src/ollama.js')
     await expect(chatOnce('test', [])).rejects.toThrow('Ollama API error: 503 Service Unavailable')
   })
 
@@ -73,7 +73,7 @@ describe('chatOnce', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { chatOnce } = await import('./ollama.js')
+    const { chatOnce } = await import('../src/ollama.js')
     const result = await chatOnce('test', [])
     expect(result).toBe('')
   })
@@ -85,7 +85,7 @@ describe('chatOnce', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { chatOnce } = await import('./ollama.js')
+    const { chatOnce } = await import('../src/ollama.js')
     await chatOnce('test', [])
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.options.num_ctx).toBe(8192)
@@ -106,7 +106,7 @@ describe('streamChat', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { streamChat } = await import('./ollama.js')
+    const { streamChat } = await import('../src/ollama.js')
     const tokens: string[] = []
     for await (const token of streamChat('ollama/test', [])) {
       tokens.push(token)
@@ -126,7 +126,7 @@ describe('streamChat', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { streamChat } = await import('./ollama.js')
+    const { streamChat } = await import('../src/ollama.js')
     const tokens: string[] = []
     for await (const token of streamChat('test', [])) {
       tokens.push(token)
@@ -148,7 +148,7 @@ describe('streamChat', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { streamChat } = await import('./ollama.js')
+    const { streamChat } = await import('../src/ollama.js')
     const tokens: string[] = []
     for await (const token of streamChat('test', [])) {
       tokens.push(token)
@@ -168,7 +168,7 @@ describe('streamChat', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { streamChat } = await import('./ollama.js')
+    const { streamChat } = await import('../src/ollama.js')
     const tokens: string[] = []
     for await (const token of streamChat('test', [])) {
       tokens.push(token)
@@ -184,7 +184,7 @@ describe('streamChat', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { streamChat } = await import('./ollama.js')
+    const { streamChat } = await import('../src/ollama.js')
     const generator = streamChat('test', [])
     await expect(generator.next()).rejects.toThrow('Ollama API error: 500 Internal Error')
   })
@@ -196,7 +196,7 @@ describe('streamChat', () => {
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    const { streamChat } = await import('./ollama.js')
+    const { streamChat } = await import('../src/ollama.js')
     const generator = streamChat('test', [])
     await expect(generator.next()).rejects.toThrow('No response body')
   })

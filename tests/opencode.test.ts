@@ -24,7 +24,7 @@ describe('runOpencodeTask', () => {
   it('spawns opencode with correct args and no key', async () => {
     delete process.env.LOCALCLAW_OPENCODE_API_KEY
     process.env.LOCALCLAW_OLLAMA_URL = 'http://localhost:11434'
-    const { runOpencodeTask } = await import('./opencode.js')
+    const { runOpencodeTask } = await import('../src/opencode.js')
     await runOpencodeTask('write a test', 'ollama/qwen2.5:3b')
     expect(mockSpawn).toHaveBeenCalledWith(
       'opencode',
@@ -41,7 +41,7 @@ describe('runOpencodeTask', () => {
   it('passes ANTHROPIC_API_KEY env when LOCALCLAW_OPENCODE_API_KEY is set', async () => {
     process.env.LOCALCLAW_OPENCODE_API_KEY = 'sk-ant-test123'
     process.env.LOCALCLAW_OLLAMA_URL = 'http://localhost:11434'
-    const { runOpencodeTask } = await import('./opencode.js')
+    const { runOpencodeTask } = await import('../src/opencode.js')
     await runOpencodeTask('test', 'ollama/qwen2.5:3b')
     const env = mockSpawn.mock.calls[0][2].env
     expect(env.ANTHROPIC_API_KEY).toBe('sk-ant-test123')
@@ -50,7 +50,7 @@ describe('runOpencodeTask', () => {
   it('does not include ANTHROPIC_API_KEY when no key is set', async () => {
     delete process.env.LOCALCLAW_OPENCODE_API_KEY
     process.env.LOCALCLAW_OLLAMA_URL = 'http://localhost:11434'
-    const { runOpencodeTask } = await import('./opencode.js')
+    const { runOpencodeTask } = await import('../src/opencode.js')
     await runOpencodeTask('test', 'ollama/qwen2.5:3b')
     const env = mockSpawn.mock.calls[0][2].env
     expect(env).not.toHaveProperty('ANTHROPIC_API_KEY')
@@ -59,7 +59,7 @@ describe('runOpencodeTask', () => {
   it('embeds OLLAMA_BASE in config JSON', async () => {
     delete process.env.LOCALCLAW_OPENCODE_API_KEY
     process.env.LOCALCLAW_OLLAMA_URL = 'http://custom:11434'
-    const { runOpencodeTask } = await import('./opencode.js')
+    const { runOpencodeTask } = await import('../src/opencode.js')
     await runOpencodeTask('test', 'ollama/qwen2.5:3b')
     const env = mockSpawn.mock.calls[0][2].env
     const config = JSON.parse(env.OPENCODE_CONFIG_CONTENT)
@@ -69,7 +69,7 @@ describe('runOpencodeTask', () => {
   it('includes sessionId in args when provided', async () => {
     delete process.env.LOCALCLAW_OPENCODE_API_KEY
     process.env.LOCALCLAW_OLLAMA_URL = 'http://localhost:11434'
-    const { runOpencodeTask } = await import('./opencode.js')
+    const { runOpencodeTask } = await import('../src/opencode.js')
     await runOpencodeTask('test', 'ollama/qwen2.5:3b', 'session-123')
     expect(mockSpawn).toHaveBeenCalledWith(
       'opencode',
@@ -82,7 +82,7 @@ describe('runOpencodeTask', () => {
     delete process.env.LOCALCLAW_OPENCODE_API_KEY
     process.env.LOCALCLAW_OLLAMA_URL = 'http://localhost:11434'
     makeMockSpawn(0, 'task completed')
-    const { runOpencodeTask } = await import('./opencode.js')
+    const { runOpencodeTask } = await import('../src/opencode.js')
     const result = await runOpencodeTask('test', 'ollama/qwen2.5:3b')
     expect(result).toBe('task completed')
   })
@@ -91,7 +91,7 @@ describe('runOpencodeTask', () => {
     delete process.env.LOCALCLAW_OPENCODE_API_KEY
     process.env.LOCALCLAW_OLLAMA_URL = 'http://localhost:11434'
     makeMockSpawn(1, '')
-    const { runOpencodeTask } = await import('./opencode.js')
+    const { runOpencodeTask } = await import('../src/opencode.js')
     await expect(runOpencodeTask('test', 'ollama/qwen2.5:3b')).rejects.toThrow('opencode exited with code 1')
   })
 
@@ -103,7 +103,7 @@ describe('runOpencodeTask', () => {
       stderr: { on: vi.fn((e: string, cb: (d: string) => void) => { if (e === 'data') setImmediate(() => cb('error detail')) }) },
       on: vi.fn((e: string, cb: (code: number) => void) => { if (e === 'close') setImmediate(() => cb(1)) }),
     })
-    const { runOpencodeTask } = await import('./opencode.js')
+    const { runOpencodeTask } = await import('../src/opencode.js')
     const result = await runOpencodeTask('test', 'ollama/qwen2.5:3b')
     expect(result).toBe('partial output')
   })

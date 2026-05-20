@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseSchedule, getNextRun } from './scheduler.js'
+import { parseSchedule, getNextRun } from '../src/scheduler.js'
 
 describe('parseSchedule', () => {
   it('parses "every 5m"', () => {
