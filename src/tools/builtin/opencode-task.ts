@@ -16,9 +16,8 @@ export const opencodeTaskTool: ToolModule = {
   },
   execute: async (args) => {
     const { task } = args
-    const model = (args.model as string) || process.env.LOCALCLAW_MODEL || 'ollama/llama3.2:3b'
     try {
-      const result = await runOpencodeTask(task as string, model)
+      const result = await runOpencodeTask(task as string)
       return result || '(OpenCode completed with no output)'
     } catch (err: any) {
       return `OpenCode task failed: ${err.message}`

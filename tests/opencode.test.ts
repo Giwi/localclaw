@@ -25,10 +25,10 @@ describe('runOpencodeTask', () => {
     delete process.env.LOCALCLAW_OPENCODE_API_KEY
     process.env.LOCALCLAW_OLLAMA_URL = 'http://localhost:11434'
     const { runOpencodeTask } = await import('../src/opencode.js')
-    await runOpencodeTask('write a test', 'ollama/qwen2.5:3b')
+    await runOpencodeTask('write a test')
     expect(mockSpawn).toHaveBeenCalledWith(
       'opencode',
-      ['run', '--model', 'ollama/qwen2.5:3b', 'write a test'],
+      ['run', 'write a test'],
       expect.objectContaining({
         env: expect.objectContaining({
           OPENCODE_DISABLE_AUTOUPDATE: '1',
@@ -70,10 +70,10 @@ describe('runOpencodeTask', () => {
     delete process.env.LOCALCLAW_OPENCODE_API_KEY
     process.env.LOCALCLAW_OLLAMA_URL = 'http://localhost:11434'
     const { runOpencodeTask } = await import('../src/opencode.js')
-    await runOpencodeTask('test', 'ollama/qwen2.5:3b', 'session-123')
+    await runOpencodeTask('test', undefined, 'session-123')
     expect(mockSpawn).toHaveBeenCalledWith(
       'opencode',
-      ['run', '--model', 'ollama/qwen2.5:3b', '--session', 'session-123', 'test'],
+      ['run', '--session', 'session-123', 'test'],
       expect.any(Object),
     )
   })

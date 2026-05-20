@@ -334,7 +334,7 @@ export class App implements OnInit, OnDestroy {
       this.chatSubscription = null
       this.api.cancelChat()
       this.showToast('Request timed out', 'error')
-    }, 120_000)
+    }, 300_000)
 
     const done = () => {
       this.loading.set(false)

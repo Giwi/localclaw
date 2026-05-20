@@ -5,6 +5,7 @@ import { ToolRegistry } from './tools/registry.js'
 import { log } from './log.js'
 import { storeMemory, searchMemories, searchKnowledge, addToolCall } from './db.js'
 import { embed } from './embeddings.js'
+import { runOpencodeTask } from './opencode.js'
 
 const OLLAMA_BASE = process.env.LOCALCLAW_OLLAMA_URL || 'http://localhost:11434'
 const MAX_TOOL_LOOPS = 15
@@ -118,13 +119,39 @@ export class Agent {
     }).join('\n')
   }
 
+  private async createDynamicTool(userQuery: string, sessionId?: string): Promise<string | null> {
+    const t0 = Date.now()
+    log.agent(`Creating dynamic tool for: "${userQuery.slice(0, 80)}"...`)
+    const script = await runOpencodeTask(
+      `The user asked: "${userQuery}". Existing tools don't match this task — the AI model keeps giving wrong answers.\n\nGenerate a bash ONE-LINER that answers the question directly. Output ONLY:\nbash: <one-liner command that prints the answer>`,
+    )
+    log.agent(`OpenCode returned (${Date.now() - t0}ms): "${script.slice(0, 120)}"`)
+    const bashMatch = script.match(/^bash:\s*(.+)/im)
+    if (!bashMatch) {
+      log.agent(`OpenCode did not return a bash command (got: "${script.slice(0, 80)}")`)
+      return null
+    }
+    const toolName = `tool_dynamic_${Date.now()}`
+    const toolCode = bashMatch[1].trim()
+    log.agent(`Registering tool "${toolName}" with: "${toolCode.slice(0, 120)}"`)
+    this.toolRegistry.registerDynamic({
+      name: toolName,
+      description: `Custom tool created for: ${userQuery.slice(0, 100)}`,
+      language: 'bash',
+      code: toolCode,
+      parameters: { type: 'object', properties: {}, required: [] },
+    })
+    log.agent(`Dynamic tool created (${Date.now() - t0}ms): ${toolName}`)
+    return toolName
+  }
+
   async *run(
     model: string,
     messages: { role: string; content: string }[],
     sessionId?: string,
     systemPrompt?: string
   ): AsyncGenerator<AgentEvent> {
-    const tools = this.buildToolDefs()
+    let tools = this.buildToolDefs()
     let history = [...messages]
 
     let systemContent = systemPrompt || SYSTEM_PROMPT_HEAD + this.buildToolDescriptions() + SYSTEM_PROMPT_TAIL
@@ -175,8 +202,9 @@ export class Agent {
             model: this.modelId(model),
             prompt: `Summarize the following conversation concisely, keeping key facts, decisions, and context:\n\n${oldMsgs.map(m => `[${m.role}]: ${m.content.slice(0, 1000)}`).join('\n')}\n\nSummary:`,
             stream: false,
-            options: { num_ctx: 4096 },
+            options: { num_ctx: 8192 },
           }),
+          signal: AbortSignal.timeout(120_000),
         })
         if (summaryRes.ok) {
           const summaryData = await summaryRes.json()
@@ -198,16 +226,19 @@ export class Agent {
 
     const FORCE_TOOL_MSG: { role: string; content: string } = {
       role: 'system',
-      content: `You did NOT call any tool. Call a tool NOW. Use ${this.toolRegistry.list().filter(t => !['send_email','schedule_task'].includes(t.name)).slice(0, 5).map(t => t.name).join(', ')}, or another tool. Do not apologize — just call one.`,
+      content: `You did NOT call any tool. Call a tool NOW. Use ${this.toolRegistry.list().filter(t => !['send_email','schedule_task'].includes(t.name)).slice(0, 5).map(t => t.name).join(', ')}, or another tool. Do not apologize — just call one. / Vous n'avez appelé aucun outil. Utilisez un outil immédiatement.`,
     }
 
     let apiMessages: any[] = [systemMsg, ...history]
     let forceTool = false
     let lastToolResult = ''
+    let stuckCount = 0
+    let toolCreated = false
+    let emptyCount = 0
 
     const PERSIST_MSG: { role: string; content: string } = {
       role: 'system',
-      content: 'Your previous attempt did not find useful results. Try a completely different approach — different search query (shorter, fewer quotes), fetch the site URL directly, or use a different tool. Do NOT repeat the same query.',
+      content: 'Your previous attempt did not find useful results. Try a completely different approach — different search query (shorter, fewer quotes), fetch the site URL directly, or use a different tool. Do NOT repeat the same query. / Votre tentative précédente n\'a pas donné de résultats. Essayez une approche complètement différente.',
     }
 
     for (let loop = 0; loop < MAX_TOOL_LOOPS; loop++) {
@@ -229,6 +260,7 @@ export class Agent {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(300_000),
       })
 
       if (!res.ok) {
@@ -258,7 +290,7 @@ export class Agent {
       log.agent(`Ollama ${elapsed}ms  response=${responseLog}`)
 
       if (!toolCalls || toolCalls.length === 0) {
-        const isAdvisory = /(you can|you could|i suggest|try using|you need to|you should|i will|i'll|let me|going to)/i.test(content)
+        const isAdvisory = /(i suggest|try using|you need to|you should|i will|i'll|let me|going to|can you|could you|please provide|je suggère|essayez d'utiliser|vous devez|je vais|je vais|laissez-moi|je propose|je peux vous|je pourrais)/i.test(content)
 
         if (forceTool && content.trim()) {
           if (isAdvisory && loop < MAX_TOOL_LOOPS - 1) {
@@ -273,6 +305,59 @@ export class Agent {
         }
 
         if (content.trim()) {
+          const weakResult = lastToolResult && (
+            lastToolResult.includes('No results') ||
+            lastToolResult.includes('No news found') ||
+            lastToolResult.includes('no images') ||
+            lastToolResult.includes('No images') ||
+            lastToolResult.includes('not found') ||
+            lastToolResult.includes('Error:') ||
+            lastToolResult.includes('empty') ||
+            lastToolResult.includes('Aucun résultat') ||
+            lastToolResult.includes('introuvable') ||
+            lastToolResult.includes('Erreur:') ||
+            lastToolResult.includes('vide') ||
+            lastToolResult.includes('Aucune actualité') ||
+            lastToolResult.length < 30
+          )
+          const givingUp = /(cannot find|could not find|does not contain|don't have|can't find|doesn't seem|couldn't locate|not directly|pas directement|ne contient pas|ne contiennent pas|doesn't contain|no relevant|rien trouvé|aucun résultat|n'a pas trouvé|je n'ai pas trouvé|je ne peux pas|je ne trouve pas|impossible de trouver|aucune information|pas d'information)/i.test(content)
+
+          // Priority 0: No tool called but model produces detailed content — fabricated
+          if (!lastToolResult && content.trim().length > 50 && !toolCreated) {
+            stuckCount++
+            const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+            const toolName = await this.createDynamicTool(lastUserMsg?.content || '')
+            if (toolName) {
+              toolCreated = true
+              tools = this.buildToolDefs()
+              apiMessages.push({
+                role: 'system',
+                content: `A new tool "${toolName}" is now available. Use it to answer the user's question. / Un nouvel outil "${toolName}" est disponible. Utilisez-le pour répondre à la question.`,
+              })
+              continue
+            }
+            log.agent('Could not create dynamic tool, falling back')
+          }
+
+          // Priority 1: Dynamic tool creation when a tool already failed and model is stuck
+          if ((weakResult || stuckCount > 0) && (isAdvisory || givingUp) && loop > 0 && !toolCreated) {
+            stuckCount++
+            const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+            const toolName = await this.createDynamicTool(lastUserMsg?.content || '')
+            if (toolName) {
+              toolCreated = true
+              tools = this.buildToolDefs()
+              apiMessages.push({ role: 'assistant', content })
+              apiMessages.push({
+                role: 'system',
+                content: `A new tool "${toolName}" is now available. Use it to answer the user's question. / Un nouvel outil "${toolName}" est disponible. Utilisez-le pour répondre à la question.`,
+              })
+              continue
+            }
+            log.agent('Could not create dynamic tool, falling back')
+          }
+
+          // Priority 2: Advisory re-prompt (before any tool was tried)
           if (isAdvisory) {
             log.agent(`Advisory response detected, re-prompting for tool use`)
             apiMessages.push({ role: 'assistant', content })
@@ -281,16 +366,7 @@ export class Agent {
             continue
           }
 
-          // If the last tool result was unsatisfactory, persist
-          const weakResult = lastToolResult && (
-            lastToolResult.includes('No results') ||
-            lastToolResult.includes('no images') ||
-            lastToolResult.includes('No images') ||
-            lastToolResult.includes('not found') ||
-            lastToolResult.includes('Error:') ||
-            lastToolResult.includes('empty') ||
-            lastToolResult.length < 30
-          )
+          // Priority 3: Weak result re-prompt
           if (weakResult && loop < MAX_TOOL_LOOPS - 1) {
             log.agent(`Weak result (${lastToolResult.slice(0, 60)}...), re-prompting for another attempt`)
             apiMessages.push({ role: 'assistant', content })
@@ -298,8 +374,7 @@ export class Agent {
             continue
           }
 
-          // If the model is giving up instead of trying harder, persist
-          const givingUp = /(cannot find|could not find|does not contain|don't have|can't find|doesn't seem|couldn't locate|not directly|pas directement|ne contient pas|ne contiennent pas|doesn't contain|no relevant|rien trouvé|aucun résultat|n'a pas trouvé)/i.test(content)
+          // Priority 4: Giving up re-prompt
           if (givingUp && loop > 0 && loop < MAX_TOOL_LOOPS - 1) {
             log.agent('Model gave up after tool use, re-prompting for another attempt')
             apiMessages.push({ role: 'assistant', content })
@@ -309,14 +384,29 @@ export class Agent {
 
           log.agent('Yielding text response')
           yield { type: 'text', content }
-        } else {
-          if (loop < MAX_TOOL_LOOPS - 1) {
-            log.agent('Empty response from model, re-prompting')
-            apiMessages.push({ role: 'assistant', content: '(no output)' })
-            apiMessages.push(FORCE_TOOL_MSG)
-            forceTool = true
-            continue
-          }
+          } else {
+            emptyCount++
+            if (emptyCount >= 2 && !toolCreated) {
+              const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+              const toolName = await this.createDynamicTool(lastUserMsg?.content || '')
+              if (toolName) {
+                toolCreated = true
+                tools = this.buildToolDefs()
+                log.agent(`Dynamic tool created after ${emptyCount} empty responses`)
+                apiMessages.push({
+                  role: 'system',
+                  content: `A new tool "${toolName}" is now available. Use it to answer the user's question. / Un nouvel outil "${toolName}" est disponible. Utilisez-le pour répondre à la question.`,
+                })
+                continue
+              }
+            }
+            if (loop < MAX_TOOL_LOOPS - 1) {
+              log.agent(`Empty response from model (${emptyCount}x), re-prompting`)
+              apiMessages.push({ role: 'assistant', content: '(no output)' })
+              apiMessages.push(FORCE_TOOL_MSG)
+              forceTool = true
+              continue
+            }
           log.agent('Empty response from model, giving up')
         }
         return

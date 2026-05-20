@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import { log } from './log.js'
 
 const OPENCODE_BIN = process.env.LOCALCLAW_OPENCODE_BIN || 'opencode'
 const OPENCODE_API_KEY = process.env.LOCALCLAW_OPENCODE_API_KEY
@@ -16,11 +17,13 @@ const OPENCODE_CONFIG = JSON.stringify({
 
 export async function runOpencodeTask(
   input: string,
-  model: string,
+  model?: string,
   sessionId?: string
 ): Promise<string> {
+  log.agent(`opencode run  input="${input.slice(0, 140)}..."`)
+  const t0 = Date.now()
   return new Promise((resolve, reject) => {
-    const args = ['run', '--model', model]
+    const args = ['run']
 
     if (sessionId) {
       args.push('--session', sessionId)
@@ -50,6 +53,8 @@ export async function runOpencodeTask(
     })
 
     proc.on('close', (code) => {
+      const elapsed = Date.now() - t0
+      log.agent(`opencode done exit=${code} chars=${(stdout || stderr).trim().length} duration=${elapsed}ms`)
       if (code !== 0 && !stdout) {
         reject(new Error(`opencode exited with code ${code}: ${stderr}`))
       } else {
@@ -58,6 +63,8 @@ export async function runOpencodeTask(
     })
 
     proc.on('error', () => {
+      const elapsed = Date.now() - t0
+      log.agent(`opencode failed to start after ${elapsed}ms`)
       reject(new Error('Failed to start opencode. Is it installed?'))
     })
   })

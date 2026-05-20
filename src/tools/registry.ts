@@ -156,6 +156,15 @@ export class ToolRegistry {
     this.tools.set(name, tool)
   }
 
+  /** Register a dynamic tool without test run. Saves to disk for persistence. */
+  registerDynamic(def: ToolDefinition): void {
+    fs.writeFileSync(path.join(this.toolsDir, `${def.name}.json`), JSON.stringify(def, null, 2))
+    this.tools.set(def.name, {
+      definition: def,
+      execute: (args) => this.executeDynamic(def, args),
+    })
+  }
+
   list(): ToolDefinition[] {
     return Array.from(this.tools.values()).map((t) => t.definition)
   }
