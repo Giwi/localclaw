@@ -198,11 +198,11 @@ export class Agent {
       const prompts = round === 0
         ? [
             `Answer this question concisely. Use any tools you need (web_search, bash, read_file). Answer in the user's language:\n\n${userQuery}`,
-            `Find the answer and respond. Use web_search if you need current data. Be concise:\n\n${userQuery}`,
-            `${userQuery}`,
+            `Find the answer and respond in the user's language. Use web_search if you need current data. Be concise:\n\n${userQuery}`,
+            `Answer in the user's language:\n\n${userQuery}`,
           ]
         : [
-            `Your previous attempts didn't produce a useful answer. Try a completely different approach. Use web_search with a different query:\n\n${userQuery}`,
+            `Your previous attempts didn't produce a useful answer. Try a completely different approach. Answer in the user's language:\n\n${userQuery}`,
             `Search the web for current information, then answer concisely in the user's language:\n\n${userQuery}`,
           ]
 
@@ -259,6 +259,34 @@ export class Agent {
       log.agent(`Dynamic answer failed: ${err.message}`)
     }
     return null
+  }
+
+  /**
+   * Classify whether a model response is advisory (suggesting/refusing/avoiding)
+   * or a direct answer.  Uses Ollama for classification with regex fallback.
+   */
+  private async classifyAdvisory(content: string, model: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${OLLAMA_BASE}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.modelId(model),
+          prompt: `Does the following AI response ADVISORY or ANSWER?\n\n"${content.slice(0, 800)}"\n\nReply ONLY with the single word ADVISORY or ANSWER.`,
+          stream: false,
+          options: { num_ctx: 2048 },
+        }),
+        signal: AbortSignal.timeout(8_000),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const word = (data.response || '').trim().toUpperCase().replace(/[^A-Z]/g, '')
+        if (word === 'ADVISORY') return true
+        if (word === 'ANSWER') return false
+      }
+    } catch {}
+    // Fallback: regex patterns
+    return /(i suggest|try using|you need to|you should|i will|i'll|let me|going to|can you|could you|please provide|je suggère|essayez d'utiliser|vous devez|je vais|laissez-moi|je propose|je peux vous|je pourrais|voici quelques|ressources|vous pouvez consulter|tu peux trouver|here are some)/i.test(content)
   }
 
   /**
@@ -401,18 +429,11 @@ export class Agent {
               // OpenCode answered directly — present it.
               log.agent(`Pre-plan succeeded (${prePlanResult.length}ch)`)
 
-              // Short answers are likely already well-formatted — yield directly.
-              if (prePlanResult.length < 500) {
-                yield { type: 'text', content: prePlanResult }
-                log.agent(`Pre-plan: yielded directly (${prePlanResult.length}ch)`)
-                return
-              }
-
-              // Longer answers: try Ollama to condense, streamed with a quality gate.
+              // Ask Ollama to present the answer in the user's language.
               yield { type: 'status', content: 'Formatting response...' }
               const formatMessages: any[] = [
                 ...apiMessages,
-                { role: 'assistant', content: `Condense the following answer into a concise response in the user's language:\n\n${prePlanResult.slice(0, 4000)}` },
+                { role: 'assistant', content: `Answer the user's question in their language based on this data. Be concise:\n\n${prePlanResult.slice(0, 4000)}` },
               ]
 
               const formatRes = await fetch(`${OLLAMA_BASE}/api/chat`, {
@@ -547,12 +568,13 @@ export class Agent {
       if (!toolCalls || toolCalls.length === 0) {
 
         // Detect "advisory" text where the model avoids action.
-        // Covers English + French patterns.
-        const isAdvisory = /(i suggest|try using|you need to|you should|i will|i'll|let me|going to|can you|could you|please provide|je suggère|essayez d'utiliser|vous devez|je vais|je vais|laissez-moi|je propose|je peux vous|je pourrais|voici quelques|ressources|vous pouvez consulter|tu peux trouver|here are some)/i.test(content)
+        // Skip classification for clear success confirmations (fast path).
+        const isSuccess = /(successfully scheduled|successfully created|task has been|background task|cron task|scheduled task|tâche a été|planifiée avec succès|programmée pour)/i.test(content)
+        const isAdvisory = isSuccess ? false : await this.classifyAdvisory(content, model)
 
         // ---- Forced-tool mode: model was told to call a tool but didn't ----
         if (forceTool && content.trim()) {
-          if (isAdvisory && loop < MAX_TOOL_LOOPS - 1) {
+          if (isAdvisory && !isSuccess && loop < MAX_TOOL_LOOPS - 1) {
             log.agent('Force-tool advisory response, re-prompting again')
             apiMessages.push({ role: 'assistant', content })
             apiMessages.push(FORCE_TOOL_MSG)
@@ -620,7 +642,7 @@ export class Agent {
           // Priority 2: Advisory language detected.  Re-prompt with a demand
           // to call a tool instead.  Also increments stuckCount so the next
           // advisory iteration will trigger Priority 1 (dynamic tool creation).
-          if (isAdvisory) {
+          if (isAdvisory && !isSuccess) {
             log.agent(`Advisory response detected, re-prompting for tool use`)
             apiMessages.push({ role: 'assistant', content })
             apiMessages.push(FORCE_TOOL_MSG)

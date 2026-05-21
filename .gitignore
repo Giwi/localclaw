@@ -16,6 +16,9 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Agent instructions (not committed)
+AGENTS.md
+
 # Logs
 *.log
 npm-debug.log*
