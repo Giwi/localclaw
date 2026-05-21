@@ -1,3 +1,24 @@
+/**
+ * opencode.ts — Spawn the OpenCode CLI as an external agent
+ *
+ * OpenCode (https://opencode.ai) is a separate CLI tool that can run tasks
+ * using its own model (typically Anthropic Claude via the OPENCODE_API_KEY).
+ * We use it in two places:
+ *
+ *   1. Pre-planning (agent.ts) — before the main Ollama loop starts,
+ *      OpenCode analyses the user query and may generate a bash one-liner
+ *      tool that directly answers the question.
+ *
+ *   2. Dynamic tool creation (agent.ts) — when the Ollama model is stuck,
+ *      OpenCode is asked to produce a bash command that answers the question
+ *      directly.
+ *
+ * Environment variables:
+ *   LOCALCLAW_OPENCODE_BIN   — path to the opencode binary (default: "opencode")
+ *   LOCALCLAW_OPENCODE_API_KEY — Anthropic API key for OpenCode's model
+ *   LOCALCLAW_OLLAMA_URL    — base URL for the Ollama-compatible model server
+ */
+
 import { spawn } from 'child_process'
 import { log } from './log.js'
 
@@ -5,6 +26,9 @@ const OPENCODE_BIN = process.env.LOCALCLAW_OPENCODE_BIN || 'opencode'
 const OPENCODE_API_KEY = process.env.LOCALCLAW_OPENCODE_API_KEY
 const OLLAMA_BASE = process.env.LOCALCLAW_OLLAMA_URL || 'http://localhost:11434'
 
+// Configuration JSON passed to OpenCode via OPENCODE_CONFIG_CONTENT env var.
+// Sets up an Ollama-compatible provider so OpenCode can fall back to the local
+// model when no API key is provided.
 const OPENCODE_CONFIG = JSON.stringify({
   provider: {
     ollama: {
@@ -15,6 +39,14 @@ const OPENCODE_CONFIG = JSON.stringify({
   },
 })
 
+/**
+ * Run an OpenCode task and return its stdout.
+ *
+ * @param input      The task / prompt to send to OpenCode.
+ * @param model      (optional) Model override — currently unused.
+ * @param sessionId  (optional) OpenCode session ID for conversation context.
+ * @returns          The trimmed stdout output from OpenCode.
+ */
 export async function runOpencodeTask(
   input: string,
   model?: string,
@@ -37,6 +69,8 @@ export async function runOpencodeTask(
         ...process.env,
         OPENCODE_DISABLE_AUTOUPDATE: '1',
         OPENCODE_CONFIG_CONTENT: OPENCODE_CONFIG,
+        // When an Anthropic key is available, OpenCode will prefer it over
+        // the local Ollama model for better reasoning capabilities.
         ...(OPENCODE_API_KEY ? { ANTHROPIC_API_KEY: OPENCODE_API_KEY } : {}),
       },
     })

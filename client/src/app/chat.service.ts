@@ -34,7 +34,7 @@ export interface BackgroundTask {
 }
 
 export interface StreamChunk {
-  type: 'text' | 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error' | 'done' | 'error'
+  type: 'text' | 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error' | 'status' | 'done' | 'error'
   content?: string
   toolName?: string
   toolRunId?: string
@@ -138,19 +138,23 @@ export class ChatService {
     }
 
     ws.onerror = () => {
-      this.zone.run(() => subject.error(new Error('WebSocket error')))
-      this.ws = null
-      this.wsSubject = null
+      this.zone.run(() => {
+        subject.error(new Error('WebSocket error'))
+        this.ws = null
+        this.wsSubject = null
+      })
     }
 
     ws.onclose = () => {
-      if (this.wsSubject === subject) {
-        this.zone.run(() => subject.complete())
-        this.wsSubject = null
-      }
-      if (this.ws === ws) {
-        this.ws = null
-      }
+      this.zone.run(() => {
+        if (this.wsSubject === subject) {
+          subject.complete()
+          this.wsSubject = null
+        }
+        if (this.ws === ws) {
+          this.ws = null
+        }
+      })
     }
 
     return subject.asObservable()

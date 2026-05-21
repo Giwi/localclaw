@@ -1,3 +1,55 @@
+/**
+ * agent.ts — Core agent loop
+ *
+ * This module implements the main "agentic loop" that drives the entire chat
+ * experience.  The high-level flow for each incoming message is:
+ *
+ *   1. RAG — embed the last user message, retrieve relevant memories &
+ *      knowledge chunks from the DB, and inject them into the system prompt.
+ *
+ *   2. Context summarization — if the conversation history exceeds ~8 000
+ *      characters, older messages are summarized down to a short paragraph so
+ *      the Ollama context window doesn't overflow.
+ *
+ *   3. Pre-planning — before the Ollama model even sees the message, OpenCode
+ *      (an external CLI agent) analyses the query and proactively generates a
+ *      bash one-liner tool when appropriate.  This gives small local models a
+ *      concrete tool they can call from the very first turn instead of
+ *      hallucinating.
+ *
+ *   4. Agent loop — up to 15 iterations of:
+ *      a. Send messages to Ollama → get a response (text + optional tool_calls).
+ *      b. If the model called a tool:  execute it, stream chunks back to the
+ *         client, and append the result to the conversation.
+ *      c. If the model produced text only (no tool call):  analyse the text for
+ *         various failure modes and decide whether to re-prompt, create a
+ *         dynamic tool, or yield the text as the final answer.
+ *
+ *   Failure-mode handling (priorities):
+ *     Priority 0  —  Model fabricated content without calling any tool.
+ *                    → Create a dynamic tool via OpenCode and inject it.
+ *     Priority 1  —  A previous tool produced a weak result AND the model is
+ *                    either being advisory or giving up.
+ *                    → Create another dynamic tool via OpenCode.
+ *     Priority 2  —  Advisory text ("you can try …", "voici quelques
+ *                    ressources …") instead of action.
+ *                    → Re-prompt with a force-tool message.
+ *     Priority 3  —  Weak tool result (empty, "not found", etc.).
+ *                    → Re-prompt with a "try harder" message.
+ *     Priority 4  —  Giving-up text ("I couldn't find …", "je ne trouve pas").
+ *                    → Re-prompt with a "try harder" message.
+ *
+ *   Dynamic tools are created via OpenCode (see opencode.ts) and registered
+ *   using the `registerDynamic()` method which bypasses the normal test-run
+ *   step.  Up to 3 attempts are allowed per conversation (dynamicToolAttempts).
+ *   Tools that return 0 characters are automatically unregistered so the
+ *   model can't loop on a broken tool.
+ *
+ *   All events (text, tool_start, tool_chunk, tool_end, tool_error, status,
+ *   done, error) are yielded as an AsyncGenerator.  The WebSocket handler in
+ *   ws.ts consumes this generator and forwards JSON chunks to the client.
+ */
+
 import type { AgentEvent } from './tools/types.js'
 import type { ToolDefinition } from './tools/types.js'
 import type Database from 'better-sqlite3'
@@ -9,6 +61,8 @@ import { runOpencodeTask } from './opencode.js'
 
 const OLLAMA_BASE = process.env.LOCALCLAW_OLLAMA_URL || 'http://localhost:11434'
 const MAX_TOOL_LOOPS = 15
+
+// ---------- Ollama API types ----------
 
 interface OllamaTool {
   type: 'function'
@@ -30,6 +84,8 @@ interface OllamaResponseMessage {
   }>
 }
 
+// ---------- System prompts ----------
+
 const SYSTEM_PROMPT_HEAD = `You are localclaw, an autonomous AI agent. You think and act independently — break down problems, execute plans, and verify results without waiting for permission.
 
 APPROACH:
@@ -44,7 +100,7 @@ EXECUTION STRATEGIES:
 - If a tool returns an error, try a different method. If a search finds nothing, try a different query.
 - Chain tools together: search → read → analyze → write. Each step feeds the next.
 - When exploring codebases: read multiple files, understand the structure, then act.
-- For web content: always fetch the actual URL rather than guessing what's there.
+- For web content: always fetch the actual URL rather than guessing what is there.
 - Use create_tool to build custom utilities when existing tools aren't enough.
 - When using send_email or send_telegram, gather ALL required data first with other tools (fetch_news, weather, web_fetch, etc.). Never send placeholders like [data], [résumé], or [summary]. If you don't have the real data yet, use tools to get it before composing the message.
 - send_telegram: the chat_id is already configured in LOCALCLAW_TELEGRAM_CHAT_ID — omit the chat_id argument to use it. Do NOT call get_chat_id unless the send fails with "env var is missing".
@@ -77,6 +133,8 @@ ALWAYS:
 - If you hit a dead end, try a radically different approach — not the same thing again.
 - After presenting results, suggest next steps or related things the user might want.`
 
+// ---------- Agent class ----------
+
 export class Agent {
   private toolRegistry: ToolRegistry
   private db: Database.Database
@@ -94,10 +152,12 @@ export class Agent {
     return this.toolRegistry
   }
 
+  /** Strip the "ollama/" prefix that some configs include. */
   private modelId(raw: string): string {
     return raw.replace(/^ollama\//, '')
   }
 
+  /** Build the tool definitions array in the format Ollama expects. */
   private buildToolDefs(): OllamaTool[] {
     return this.toolRegistry.list().map((t) => ({
       type: 'function' as const,
@@ -109,6 +169,7 @@ export class Agent {
     }))
   }
 
+  /** Build a human-readable bullet list of tools for the system prompt. */
   private buildToolDescriptions(): string {
     const tools = this.toolRegistry.list()
     return tools.map((t) => {
@@ -119,32 +180,94 @@ export class Agent {
     }).join('\n')
   }
 
-  private async createDynamicTool(userQuery: string, sessionId?: string): Promise<string | null> {
+  /**
+   * Ask OpenCode to answer the user's question directly.
+   *
+   * Runs multiple prompts in parallel across 2 rounds.  OpenCode is a capable
+   * agent (often Claude) with web_search, file reading, and other tools — it
+   * can answer questions directly without needing us to generate bash commands.
+   *
+   * Returns the best answer text (>100 chars) or null.
+   */
+  private async solveWithOpencode(userQuery: string): Promise<string | null> {
     const t0 = Date.now()
-    log.agent(`Creating dynamic tool for: "${userQuery.slice(0, 80)}"...`)
-    const script = await runOpencodeTask(
-      `The user asked: "${userQuery}". Existing tools don't match this task — the AI model keeps giving wrong answers.\n\nGenerate a bash ONE-LINER that answers the question directly. Output ONLY:\nbash: <one-liner command that prints the answer>`,
-    )
-    log.agent(`OpenCode returned (${Date.now() - t0}ms): "${script.slice(0, 120)}"`)
-    const bashMatch = script.match(/^bash:\s*(.+)/im)
-    if (!bashMatch) {
-      log.agent(`OpenCode did not return a bash command (got: "${script.slice(0, 80)}")`)
-      return null
+    const maxRounds = 2
+    const TIMEOUT = 60_000
+
+    for (let round = 0; round < maxRounds; round++) {
+      const prompts = round === 0
+        ? [
+            `Answer this question concisely. Use any tools you need (web_search, bash, read_file). Answer in the user's language:\n\n${userQuery}`,
+            `Find the answer and respond. Use web_search if you need current data. Be concise:\n\n${userQuery}`,
+            `${userQuery}`,
+          ]
+        : [
+            `Your previous attempts didn't produce a useful answer. Try a completely different approach. Use web_search with a different query:\n\n${userQuery}`,
+            `Search the web for current information, then answer concisely in the user's language:\n\n${userQuery}`,
+          ]
+
+      log.agent(`Pre-plan round ${round + 1}/${maxRounds} (${prompts.length} prompts)`)
+
+      const opencodeResults = await Promise.allSettled(
+        prompts.map((p) =>
+          Promise.race([
+            runOpencodeTask(p),
+            new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT)),
+          ])
+        )
+      )
+
+      for (const settled of opencodeResults) {
+        if (settled.status === 'fulfilled') {
+          const text = settled.value.trim()
+          if (text.length > 100) {
+            log.agent(`Pre-plan round ${round + 1}: OpenCode returned ${text.length}ch (${Date.now() - t0}ms)`)
+            return text
+          }
+          log.agent(`Pre-plan round ${round + 1}: too short (${text.length}ch): "${text.slice(0, 80)}"`)
+        }
+      }
     }
-    const toolName = `tool_dynamic_${Date.now()}`
-    const toolCode = bashMatch[1].trim()
-    log.agent(`Registering tool "${toolName}" with: "${toolCode.slice(0, 120)}"`)
-    this.toolRegistry.registerDynamic({
-      name: toolName,
-      description: `Custom tool created for: ${userQuery.slice(0, 100)}`,
-      language: 'bash',
-      code: toolCode,
-      parameters: { type: 'object', properties: {}, required: [] },
-    })
-    log.agent(`Dynamic tool created (${Date.now() - t0}ms): ${toolName}`)
-    return toolName
+
+    log.agent(`Pre-plan: no useful answer after ${maxRounds} rounds (${Date.now() - t0}ms)`)
+    return null
   }
 
+  /**
+   * Ask OpenCode to answer the question directly and return the text.
+   * Used when the pre-plan didn't produce a result or the agent loop is stuck.
+   *
+   * Returns the answer text, or null if OpenCode produced nothing useful.
+   */
+  private async askOpencode(userQuery: string, sessionId?: string): Promise<string | null> {
+    const t0 = Date.now()
+    log.agent(`Creating dynamic answer for: "${userQuery.slice(0, 80)}..."`)
+    try {
+      const answer = await Promise.race([
+        runOpencodeTask(
+          `Answer this question directly. Use web_search if you need current data. Be thorough and accurate. Answer in the user's language:\n\n${userQuery}`,
+        ),
+        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timeout')), 60_000)),
+      ])
+      const trimmed = answer.trim()
+      if (trimmed.length > 50) {
+        log.agent(`Dynamic answer: ${trimmed.length}ch (${Date.now() - t0}ms): "${trimmed.slice(0, 120)}..."`)
+        return trimmed
+      }
+      log.agent(`Dynamic answer too short (${trimmed.length}ch): "${trimmed.slice(0, 80)}"`)
+    } catch (err: any) {
+      log.agent(`Dynamic answer failed: ${err.message}`)
+    }
+    return null
+  }
+
+  /**
+   * Main agent loop — an async generator that yields events for the
+   * WebSocket handler to forward to the client.
+   *
+   * Each event is one of:  text | tool_start | tool_chunk | tool_end |
+   * tool_error | status | done | error
+   */
   async *run(
     model: string,
     messages: { role: string; content: string }[],
@@ -156,7 +279,7 @@ export class Agent {
 
     let systemContent = systemPrompt || SYSTEM_PROMPT_HEAD + this.buildToolDescriptions() + SYSTEM_PROMPT_TAIL
 
-    // RAG: retrieve relevant memories and global knowledge for the last user message
+    // ---- RAG: inject relevant past context into the system prompt ----
     if (sessionId && messages.length > 0) {
       const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
       if (lastUserMsg) {
@@ -186,7 +309,7 @@ export class Agent {
       }
     }
 
-    // Context window management: summarize old messages if history is too large
+    // ---- Context summarization: keep the window under ~8 000 chars ----
     const totalChars = history.reduce((sum, m) => sum + m.content.length, 0)
     if (totalChars > 8000 && history.length > 6) {
       log.agent(`Context too large (${totalChars} chars, ${history.length} msgs), summarizing...`)
@@ -219,30 +342,158 @@ export class Agent {
       }
     }
 
+    // ---- Re-prompt messages used when the model is being unhelpful ----
+
     const systemMsg: { role: string; content: string } = {
       role: 'system',
       content: systemContent,
     }
 
+    // Sent when the model responds with text but was told to call a tool.
     const FORCE_TOOL_MSG: { role: string; content: string } = {
       role: 'system',
       content: `You did NOT call any tool. Call a tool NOW. Use ${this.toolRegistry.list().filter(t => !['send_email','schedule_task'].includes(t.name)).slice(0, 5).map(t => t.name).join(', ')}, or another tool. Do not apologize — just call one. / Vous n'avez appelé aucun outil. Utilisez un outil immédiatement.`,
     }
 
-    let apiMessages: any[] = [systemMsg, ...history]
-    let forceTool = false
-    let lastToolResult = ''
-    let stuckCount = 0
-    let toolCreated = false
-    let emptyCount = 0
-
+    // Sent after a weak / empty tool result to push the model toward a
+    // different approach.
     const PERSIST_MSG: { role: string; content: string } = {
       role: 'system',
       content: 'Your previous attempt did not find useful results. Try a completely different approach — different search query (shorter, fewer quotes), fetch the site URL directly, or use a different tool. Do NOT repeat the same query. / Votre tentative précédente n\'a pas donné de résultats. Essayez une approche complètement différente.',
     }
 
+    let apiMessages: any[] = [systemMsg, ...history]
+
+    // ---- Loop state ----
+    let forceTool = false          // When true, the model MUST call a tool or its text is force-yielded.
+    let lastToolResult = ''        // Most recent tool result (for weak-result detection).
+    let stuckCount = 0             // How many times we had to re-prompt / create dynamic tools.
+    let dynamicToolAttempts = 0    // How many times OpenCode was called to create dynamic tools (max 3).
+    let emptyCount = 0             // How many consecutive empty responses we've seen from Ollama.
+
+    // ---- Pre-planning: OpenCode solves the query directly ----
+    //
+    // Before the Ollama model even starts, OpenCode analyses the user's query
+    // and, if appropriate, generates AND runs a bash command.  The result is
+    // injected as context so Ollama only needs to format it — no tool
+    // registration or multi-turn loop needed.
+    //
+    // If OpenCode returns "none" or the command fails, we fall through to the
+    // normal agent loop.  If it succeeds (>50 chars of output), we do a
+    // single Ollama call to present the answer and return immediately.
+    {
+      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+      if (lastUserMsg) {
+        try {
+          const query = lastUserMsg.content
+          log.agent(`Pre-planning for: "${query.slice(0, 80)}..."`)
+          yield { type: 'status', content: 'Analyzing your request...' }
+
+          // If the user wants an action performed (schedule, send, create),
+          // skip the pre-plan and let the agent loop use the registered tools.
+          const actionPattern = /(tous les jours|chaque (jour|semaine|mois)|schedule|remind|rappel|every (day|week|hour|\d+)|daily|weekly|send (to|me)|envoyer|recevoir|telegram|email|write (a|this|the) file|créer|sauvegarder)/i
+          if (actionPattern.test(query)) {
+            log.agent(`Pre-plan: action request detected, skipping to agent loop`)
+          } else {
+            const prePlanResult = await this.solveWithOpencode(query)
+
+            if (prePlanResult) {
+              // OpenCode answered directly — present it.
+              log.agent(`Pre-plan succeeded (${prePlanResult.length}ch)`)
+
+              // Short answers are likely already well-formatted — yield directly.
+              if (prePlanResult.length < 500) {
+                yield { type: 'text', content: prePlanResult }
+                log.agent(`Pre-plan: yielded directly (${prePlanResult.length}ch)`)
+                return
+              }
+
+              // Longer answers: try Ollama to condense, streamed with a quality gate.
+              yield { type: 'status', content: 'Formatting response...' }
+              const formatMessages: any[] = [
+                ...apiMessages,
+                { role: 'assistant', content: `Condense the following answer into a concise response in the user's language:\n\n${prePlanResult.slice(0, 4000)}` },
+              ]
+
+              const formatRes = await fetch(`${OLLAMA_BASE}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: this.modelId(model),
+                  messages: formatMessages,
+                  stream: true,
+                  options: { num_ctx: 8192 },
+                }),
+                signal: AbortSignal.timeout(120_000),
+              })
+
+              if (formatRes.ok && formatRes.body) {
+                const reader = formatRes.body.getReader()
+                const decoder = new TextDecoder()
+                let buf = ''
+                let fullContent = ''
+                let totalChars = 0
+                let thresholdReached = false
+
+                while (true) {
+                  const { done, value } = await reader.read()
+                  if (done) break
+                  buf += decoder.decode(value, { stream: true })
+                  const lines = buf.split('\n')
+                  buf = lines.pop() || ''
+
+                  for (const line of lines) {
+                    if (!line.trim()) continue
+                    try {
+                      const chunk = JSON.parse(line)
+                      if (chunk.message?.content) {
+                        totalChars += chunk.message.content.length
+                        fullContent += chunk.message.content
+                        if (!thresholdReached && totalChars >= 100) {
+                          thresholdReached = true
+                          yield { type: 'text', content: fullContent }
+                          fullContent = ''
+                        } else if (thresholdReached && fullContent) {
+                          yield { type: 'text', content: fullContent }
+                          fullContent = ''
+                        }
+                      }
+                    } catch { /* skip malformed lines */ }
+                  }
+                }
+
+                if (thresholdReached && fullContent) {
+                  yield { type: 'text', content: fullContent }
+                }
+
+                if (thresholdReached) {
+                  log.agent(`Pre-plan: streamed Ollama condensed response (${totalChars}ch)`)
+                  return
+                }
+                log.agent(`Pre-plan: Ollama condensed response too short (${totalChars}ch), yielding raw`)
+              } else {
+                log.agent(`Pre-plan: Ollama format call failed (${formatRes.status})`)
+              }
+
+              // Fallback: yield the raw OpenCode answer.
+              yield { type: 'text', content: prePlanResult }
+              return
+            }
+
+            // OpenCode returned nothing useful — fall through to agent loop.
+            log.agent(`Pre-plan: no direct solution, entering agent loop`)
+          }
+
+        } catch (err: any) {
+          log.agent(`Pre-plan error: ${err.message}`)
+        }
+      }
+    }
+
+    // ---- Main agent loop (max 15 turns) ----
     for (let loop = 0; loop < MAX_TOOL_LOOPS; loop++) {
       log.agent(`Loop ${loop + 1}/${MAX_TOOL_LOOPS}  history=${apiMessages.length}msgs`)
+      yield { type: 'status', content: loop === 0 ? 'Thinking...' : `Thinking (step ${loop + 1})...` }
 
       const body: any = {
         model: this.modelId(model),
@@ -255,6 +506,7 @@ export class Agent {
         body.tools = tools
       }
 
+      // ---- Call the Ollama chat API ----
       const t0 = Date.now()
       const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
         method: 'POST',
@@ -289,9 +541,16 @@ export class Agent {
       })
       log.agent(`Ollama ${elapsed}ms  response=${responseLog}`)
 
+      // ========================
+      //  NO TOOL CALL RESPONSE
+      // ========================
       if (!toolCalls || toolCalls.length === 0) {
-        const isAdvisory = /(i suggest|try using|you need to|you should|i will|i'll|let me|going to|can you|could you|please provide|je suggère|essayez d'utiliser|vous devez|je vais|je vais|laissez-moi|je propose|je peux vous|je pourrais)/i.test(content)
 
+        // Detect "advisory" text where the model avoids action.
+        // Covers English + French patterns.
+        const isAdvisory = /(i suggest|try using|you need to|you should|i will|i'll|let me|going to|can you|could you|please provide|je suggère|essayez d'utiliser|vous devez|je vais|je vais|laissez-moi|je propose|je peux vous|je pourrais|voici quelques|ressources|vous pouvez consulter|tu peux trouver|here are some)/i.test(content)
+
+        // ---- Forced-tool mode: model was told to call a tool but didn't ----
         if (forceTool && content.trim()) {
           if (isAdvisory && loop < MAX_TOOL_LOOPS - 1) {
             log.agent('Force-tool advisory response, re-prompting again')
@@ -299,12 +558,16 @@ export class Agent {
             apiMessages.push(FORCE_TOOL_MSG)
             continue
           }
+          // Non-advisory text after a force-tool prompt: accept it as final.
           log.agent('Force-tool response accepted, yielding text')
           yield { type: 'text', content }
           return
         }
 
         if (content.trim()) {
+
+          // ---- Detect weak / unhelpful tool results ----
+          // These patterns signal the previous tool didn't return useful data.
           const weakResult = lastToolResult && (
             lastToolResult.includes('No results') ||
             lastToolResult.includes('No news found') ||
@@ -320,53 +583,54 @@ export class Agent {
             lastToolResult.includes('Aucune actualité') ||
             lastToolResult.length < 30
           )
+
+          // Detect "giving up" language (English + French).
           const givingUp = /(cannot find|could not find|does not contain|don't have|can't find|doesn't seem|couldn't locate|not directly|pas directement|ne contient pas|ne contiennent pas|doesn't contain|no relevant|rien trouvé|aucun résultat|n'a pas trouvé|je n'ai pas trouvé|je ne peux pas|je ne trouve pas|impossible de trouver|aucune information|pas d'information)/i.test(content)
 
-          // Priority 0: No tool called but model produces detailed content — fabricated
-          if (!lastToolResult && content.trim().length > 50 && !toolCreated) {
+          // Priority 0: Model produced detailed text without calling any tool — likely fabricated.
+          // → Ask OpenCode to answer directly.
+          if (!lastToolResult && content.trim().length > 50 && dynamicToolAttempts < 3) {
             stuckCount++
             const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
-            const toolName = await this.createDynamicTool(lastUserMsg?.content || '')
-            if (toolName) {
-              toolCreated = true
-              tools = this.buildToolDefs()
-              apiMessages.push({
-                role: 'system',
-                content: `A new tool "${toolName}" is now available. Use it to answer the user's question. / Un nouvel outil "${toolName}" est disponible. Utilisez-le pour répondre à la question.`,
-              })
-              continue
+            yield { type: 'status', content: 'Finding the answer...' }
+            const answer = await this.askOpencode(lastUserMsg?.content || '')
+            if (answer) {
+              dynamicToolAttempts++
+              yield { type: 'text', content: answer }
+              return
             }
-            log.agent('Could not create dynamic tool, falling back')
+            log.agent('Could not get dynamic answer, falling back')
           }
 
-          // Priority 1: Dynamic tool creation when a tool already failed and model is stuck
-          if ((weakResult || stuckCount > 0) && (isAdvisory || givingUp) && loop > 0 && !toolCreated) {
+          // Priority 1: A tool was tried but returned weak data, AND the model
+          // is being advisory or giving up. → Get a direct answer from OpenCode.
+          if ((weakResult || stuckCount > 0) && (isAdvisory || givingUp) && loop > 0 && dynamicToolAttempts < 3) {
             stuckCount++
             const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
-            const toolName = await this.createDynamicTool(lastUserMsg?.content || '')
-            if (toolName) {
-              toolCreated = true
-              tools = this.buildToolDefs()
-              apiMessages.push({ role: 'assistant', content })
-              apiMessages.push({
-                role: 'system',
-                content: `A new tool "${toolName}" is now available. Use it to answer the user's question. / Un nouvel outil "${toolName}" est disponible. Utilisez-le pour répondre à la question.`,
-              })
-              continue
+            yield { type: 'status', content: 'Finding a better answer...' }
+            const answer = await this.askOpencode(lastUserMsg?.content || '')
+            if (answer) {
+              dynamicToolAttempts++
+              yield { type: 'text', content: answer }
+              return
             }
-            log.agent('Could not create dynamic tool, falling back')
+            log.agent('Could not get dynamic answer, falling back')
           }
 
-          // Priority 2: Advisory re-prompt (before any tool was tried)
+          // Priority 2: Advisory language detected.  Re-prompt with a demand
+          // to call a tool instead.  Also increments stuckCount so the next
+          // advisory iteration will trigger Priority 1 (dynamic tool creation).
           if (isAdvisory) {
             log.agent(`Advisory response detected, re-prompting for tool use`)
             apiMessages.push({ role: 'assistant', content })
             apiMessages.push(FORCE_TOOL_MSG)
             forceTool = true
+            stuckCount++
             continue
           }
 
-          // Priority 3: Weak result re-prompt
+          // Priority 3: Weak tool result (empty, "not found", etc.)
+          // → Tell the model to try a different approach.
           if (weakResult && loop < MAX_TOOL_LOOPS - 1) {
             log.agent(`Weak result (${lastToolResult.slice(0, 60)}...), re-prompting for another attempt`)
             apiMessages.push({ role: 'assistant', content })
@@ -374,7 +638,8 @@ export class Agent {
             continue
           }
 
-          // Priority 4: Giving up re-prompt
+          // Priority 4: Giving-up language after tool use
+          // → Push the model to keep trying.
           if (givingUp && loop > 0 && loop < MAX_TOOL_LOOPS - 1) {
             log.agent('Model gave up after tool use, re-prompting for another attempt')
             apiMessages.push({ role: 'assistant', content })
@@ -382,35 +647,42 @@ export class Agent {
             continue
           }
 
+          // None of the failure patterns matched — yield the text as the final answer.
           log.agent('Yielding text response')
           yield { type: 'text', content }
-          } else {
-            emptyCount++
-            if (emptyCount >= 2 && !toolCreated) {
-              const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
-              const toolName = await this.createDynamicTool(lastUserMsg?.content || '')
-              if (toolName) {
-                toolCreated = true
-                tools = this.buildToolDefs()
-                log.agent(`Dynamic tool created after ${emptyCount} empty responses`)
-                apiMessages.push({
-                  role: 'system',
-                  content: `A new tool "${toolName}" is now available. Use it to answer the user's question. / Un nouvel outil "${toolName}" est disponible. Utilisez-le pour répondre à la question.`,
-                })
-                continue
-              }
+
+        // ---- Empty response (no content, no tool call) ----
+        } else {
+          emptyCount++
+
+          // After 2 empty responses, try getting a direct answer from OpenCode.
+          if (emptyCount >= 2 && dynamicToolAttempts < 3) {
+            const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+            yield { type: 'status', content: 'Finding the answer...' }
+            const answer = await this.askOpencode(lastUserMsg?.content || '')
+            if (answer) {
+              dynamicToolAttempts++
+              yield { type: 'text', content: answer }
+              return
             }
-            if (loop < MAX_TOOL_LOOPS - 1) {
-              log.agent(`Empty response from model (${emptyCount}x), re-prompting`)
-              apiMessages.push({ role: 'assistant', content: '(no output)' })
-              apiMessages.push(FORCE_TOOL_MSG)
-              forceTool = true
-              continue
-            }
+          }
+
+          // Less than 2 empties — just re-prompt with the force-tool message.
+          if (loop < MAX_TOOL_LOOPS - 1) {
+            log.agent(`Empty response from model (${emptyCount}x), re-prompting`)
+            apiMessages.push({ role: 'assistant', content: '(no output)' })
+            apiMessages.push(FORCE_TOOL_MSG)
+            forceTool = true
+            continue
+          }
           log.agent('Empty response from model, giving up')
         }
         return
       }
+
+      // ===========================
+      //  TOOL CALL(S) IN RESPONSE
+      // ===========================
 
       forceTool = false
 
@@ -437,15 +709,17 @@ export class Agent {
 
         log.agent(`Calling tool ${toolName}`)
         yield { type: 'tool_start', toolName, toolRunId, toolArgs: args }
+        yield { type: 'status', content: `Running ${toolName}...` }
 
         const t1 = Date.now()
         try {
+          // Stream tool output chunks to the client every 150 ms while
+          // the tool is running, so long-running tools feel responsive.
           const chunkQueue: string[] = []
           const onChunk = (chunk: string) => { chunkQueue.push(chunk) }
           const toolArgs = sessionId ? { ...args, _sessionId: sessionId } : args
           const toolPromise = tool.execute(toolArgs, onChunk)
 
-          // Flush chunks periodically while tool runs, for real-time streaming
           let result: string | undefined
           while (true) {
             const raced = await Promise.race([
@@ -469,6 +743,15 @@ export class Agent {
 
           lastToolResult = result
 
+          // Remove dynamic tools that returned nothing so the model
+          // can't loop on a broken tool.
+          if (result.length === 0 && toolName.startsWith('tool_')) {
+            log.agent(`Removing failed dynamic tool "${toolName}" (0ch result)`)
+            this.toolRegistry.unregister(toolName)
+            tools = this.buildToolDefs()
+          }
+
+          // Append the tool call + result to the conversation for the next Ollama turn.
           apiMessages.push({
             role: 'assistant',
             content: content || '',
@@ -476,7 +759,7 @@ export class Agent {
           })
           apiMessages.push({ role: 'tool', content: result })
 
-          // Store tool result as memory for RAG
+          // Store tool result as a memory embedding for future RAG retrieval.
           if (sessionId && result.length < 2000) {
             try {
               const emb = await embed(result.slice(0, 1000))
@@ -507,6 +790,7 @@ export class Agent {
       }
     }
 
+    // If we exhausted all 15 loops without returning, emit an error.
     yield { type: 'error', error: 'Agent exceeded maximum tool call iterations' }
   }
 }

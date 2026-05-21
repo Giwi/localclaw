@@ -34,6 +34,7 @@ export class App implements OnInit, OnDestroy {
   sessions = signal<Session[]>([])
   messages = signal<Message[]>([])
   toolEvents = signal<ToolEvent[]>([])
+  statusMsg = signal('')
   currentSession = signal<Session | null>(null)
   input = signal('')
   loading = signal(false)
@@ -294,6 +295,7 @@ export class App implements OnInit, OnDestroy {
   stopGeneration() {
     this.api.cancelChat()
     this.loading.set(false)
+    this.statusMsg.set('')
     if (this.loadingTimeout) { clearTimeout(this.loadingTimeout); this.loadingTimeout = null }
   }
 
@@ -301,6 +303,15 @@ export class App implements OnInit, OnDestroy {
     const text = this.input().trim()
     const session = this.currentSession()
     if (!text || !session || this.loading()) return
+
+    // Optimistically rename "New Session" on first message
+    if (session.name === 'New Session' && text.length > 10) {
+      const shortName = text.length > 50 ? text.slice(0, 50) + '...' : text
+      this.sessions.update((list) =>
+        list.map((s) => (s.id === session.id ? { ...s, name: shortName } : s))
+      )
+      this.currentSession.update((s) => (s ? { ...s, name: shortName } : s))
+    }
 
     const editId = this.editingMsg()
     this.input.set('')
@@ -338,6 +349,7 @@ export class App implements OnInit, OnDestroy {
 
     const done = () => {
       this.loading.set(false)
+      this.statusMsg.set('')
       this.loadSessions()
       this.loadBackgroundTasks()
       this.chatSubscription = null
@@ -349,7 +361,12 @@ export class App implements OnInit, OnDestroy {
     this.chatSubscription = this.api.streamChat(session.id, text).subscribe({
       next: (chunk) => {
         if (this.currentSession()?.id !== session.id) return
+        if (chunk.type === 'status' && chunk.content) {
+          this.statusMsg.set(chunk.content)
+        }
+
         if (chunk.type === 'text' && chunk.content) {
+          this.statusMsg.set('')
           assistantContent += chunk.content
           const lastMsg = this.messages()[this.messages().length - 1]
           if (lastMsg?.role === 'assistant') {
@@ -412,7 +429,7 @@ export class App implements OnInit, OnDestroy {
             return copy
           })
         }
-        if (chunk.type === 'done') { done() }
+        if (chunk.type === 'done') { this.statusMsg.set(''); done() }
         if (chunk.type === 'error') { this.showToast(chunk.error || 'Chat error', 'error'); done() }
       },
       error: () => { this.showToast('Connection lost', 'error'); done() },
