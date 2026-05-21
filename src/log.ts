@@ -14,19 +14,19 @@ function ts(): string {
 }
 
 export const log = {
-  debug(msg: string, ...args: any[]) {
+  debug(msg: string, ...args: unknown[]) {
     if (!shouldLog('debug')) return
     console.log(chalk.dim(`[${ts()}]`) + chalk.gray(' DEBUG ') + msg, ...args)
   },
-  info(msg: string, ...args: any[]) {
+  info(msg: string, ...args: unknown[]) {
     if (!shouldLog('info')) return
     console.log(chalk.dim(`[${ts()}]`) + chalk.blue(' INFO  ') + msg, ...args)
   },
-  warn(msg: string, ...args: any[]) {
+  warn(msg: string, ...args: unknown[]) {
     if (!shouldLog('warn')) return
     console.log(chalk.dim(`[${ts()}]`) + chalk.yellow(' WARN  ') + msg, ...args)
   },
-  error(msg: string, ...args: any[]) {
+  error(msg: string, ...args: unknown[]) {
     if (!shouldLog('error')) return
     console.log(chalk.dim(`[${ts()}]`) + chalk.red(' ERROR ') + msg, ...args)
   },
@@ -43,11 +43,11 @@ export const log = {
         chalk.dim(` (${ms}ms)`)
     )
   },
-  agent(msg: string, ...args: any[]) {
+  agent(msg: string, ...args: unknown[]) {
     if (!shouldLog('info')) return
     console.log(chalk.dim(`[${ts()}]`) + chalk.green(' AGENT ') + msg, ...args)
   },
-  sse(msg: string, ...args: any[]) {
+  sse(msg: string, ...args: unknown[]) {
     if (!shouldLog('debug')) return
     console.log(chalk.dim(`[${ts()}]`) + chalk.cyan(' SSE   ') + msg, ...args)
   },

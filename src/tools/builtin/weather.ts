@@ -101,8 +101,8 @@ export const weatherTool: ToolModule = {
       }
 
       return result
-    } catch (err: any) {
-      return `Weather fetch failed: ${err.message}`
+    } catch (err: unknown) {
+      return `Weather fetch failed: ${err instanceof Error ? err.message : String(err)}`
     }
   },
 }

@@ -38,8 +38,8 @@ export function createSearchKnowledgeTool(db: BetterSqlite3.Database): ToolModul
         })
 
         return `Found ${results.length} relevant excerpt(s):\n\n${lines.join('\n\n')}`
-      } catch (err: any) {
-        return `Knowledge search failed: ${err.message}`
+      } catch (err: unknown) {
+        return `Knowledge search failed: ${err instanceof Error ? err.message : String(err)}`
       }
     },
   }

@@ -66,9 +66,10 @@ export const sendEmailTool: ToolModule = {
         log.agent(`Email sending failed: ${data.message || res.statusText}`)
         return `Failed to send email: ${data.message || res.statusText}. Note: sandbox domains require authorized recipients — add ${to} in Mailgun dashboard > Sending > Authorized Recipients.`
       }
-    } catch (err: any) {
-      log.agent(`Email sending error: ${err.message}`)
-      return `Email sending error: ${err.message}`
+    } catch (err: unknown) {
+      const errm = err instanceof Error ? err.message : String(err)
+      log.agent(`Email sending error: ${errm}`)
+      return `Email sending error: ${errm}`
     }
   },
 }

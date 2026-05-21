@@ -27,6 +27,7 @@ import { embed } from './embeddings.js'
 import { Agent } from './agent.js'
 import { log } from './log.js'
 
+fs.mkdirSync('/tmp/localclaw_uploads', { recursive: true })
 const upload = multer({ dest: '/tmp/localclaw_uploads', limits: { fileSize: 20 * 1024 * 1024 } })
 
 const DEFAULT_MODEL = process.env.LOCALCLAW_MODEL || 'ollama/llama3.2:3b'
@@ -154,7 +155,7 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
       } else {
         text = `[Uploaded file: ${file.originalname} (${(file.size / 1024).toFixed(1)} KB)]`
       }
-    } catch (err: any) {
+    } catch {
       text = `[Uploaded file: ${file.originalname}]`
     }
     try { fs.unlinkSync(file.path) } catch {}
@@ -201,8 +202,9 @@ except Exception as e:
         try { fs.unlinkSync(file.path) } catch {}
         return
       }
-    } catch (err: any) {
-      res.status(500).json({ error: `Failed to extract text: ${err.message}` })
+    } catch (err: unknown) {
+      const errm = err instanceof Error ? err.message : String(err)
+      res.status(500).json({ error: `Failed to extract text: ${errm}` })
       try { fs.unlinkSync(file.path) } catch {}
       return
     }

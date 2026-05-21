@@ -21,7 +21,7 @@ async function fetchTvGuide(): Promise<TvEntry[]> {
   const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
   if (!res.ok) throw new Error(`TVMaze API error ${res.status}`)
 
-  const data = await res.json() as any[]
+  const data: { airtime?: string; runtime?: number | null; show?: { name?: string; network?: { name?: string }; webChannel?: { name?: string } } }[] = await res.json()
 
   const entries: TvEntry[] = []
   for (const item of data) {
@@ -32,7 +32,7 @@ async function fetchTvGuide(): Promise<TvEntry[]> {
     entries.push({
       time: item.airtime,
       channel: item.show.network?.name || item.show.webChannel?.name || '?',
-      title: item.show.name,
+      title: item.show.name || '?',
       runtime: item.runtime || null,
     })
   }
@@ -113,8 +113,8 @@ Exemples d'utilisation :
     let entries: TvEntry[]
     try {
       entries = await fetchTvGuide()
-    } catch (err: any) {
-      return `❌ Erreur lors de la récupération du programme TV : ${err.message}`
+    } catch (err: unknown) {
+      return `❌ Erreur lors de la récupération du programme TV : ${err instanceof Error ? err.message : String(err)}`
     }
 
     const formatted = formatTvGuide(entries)

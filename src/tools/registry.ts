@@ -41,6 +41,7 @@ import { wrapCommand, isSandboxAvailable } from './sandbox.js'
 export class ToolRegistry {
   private tools = new Map<string, ToolModule>()
   private toolsDir: string
+  private dynamicNames = new Set<string>()
 
   constructor(dataDir: string) {
     this.toolsDir = path.join(dataDir, 'tools')
@@ -84,6 +85,7 @@ export class ToolRegistry {
           definition: def,
           execute: (args) => this.executeDynamic(def, args),
         })
+        this.dynamicNames.add(def.name)
       } catch { /* skip invalid tool */ }
     }
   }
@@ -166,10 +168,13 @@ export class ToolRegistry {
         return `Tool "${name}" already exists. Edit it or choose a different name.`
       }
 
+      const validLangs = ['javascript', 'python', 'bash'] as const
+      const lang = typeof language === 'string' && validLangs.includes(language as typeof validLangs[number]) ? language as 'javascript' | 'python' | 'bash' : 'javascript'
+
       const def: ToolDefinition = {
         name,
         description,
-        language: language as any,
+        language: lang,
         code: code as string,
         parameters: {
           type: 'object',
@@ -182,8 +187,8 @@ export class ToolRegistry {
       try {
         const result = await this.executeDynamic(def, { test: true })
         console.log(`Tool "${name}" test run result: ${result.slice(0, 200)}`)
-      } catch (err: any) {
-        return `Tool "${name}" test run FAILED: ${err.message}. Fix the code and try again.`
+      } catch (err: unknown) {
+        return `Tool "${name}" test run FAILED: ${err instanceof Error ? err.message : String(err)}. Fix the code and try again.`
       }
 
       fs.writeFileSync(path.join(this.toolsDir, `${name}.json`), JSON.stringify(def, null, 2))
@@ -215,6 +220,11 @@ export class ToolRegistry {
       definition: def,
       execute: (args) => this.executeDynamic(def, args),
     })
+    this.dynamicNames.add(def.name)
+  }
+
+  isDynamic(name: string): boolean {
+    return this.dynamicNames.has(name)
   }
 
   /**
@@ -224,6 +234,7 @@ export class ToolRegistry {
    */
   unregister(name: string): void {
     this.tools.delete(name)
+    this.dynamicNames.delete(name)
     const filePath = path.join(this.toolsDir, `${name}.json`)
     try { fs.unlinkSync(filePath) } catch { /* ignore */ }
   }

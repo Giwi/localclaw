@@ -32,8 +32,8 @@ export const readFileTool: ToolModule = {
     try {
       const content = fs.readFileSync(path.resolve(p), 'utf-8')
       return content
-    } catch (err: any) {
-      return `Error reading file: ${err.message}`
+    } catch (err: unknown) {
+      return `Error reading file: ${err instanceof Error ? err.message : String(err)}`
     }
   },
 }

@@ -86,11 +86,13 @@ export async function runOpencodeTask(
       stderr += data.toString()
     })
 
-    proc.on('close', (code) => {
+    proc.on('close', (code, signal) => {
       const elapsed = Date.now() - t0
-      log.agent(`opencode done exit=${code} chars=${(stdout || stderr).trim().length} duration=${elapsed}ms`)
-      if (code !== 0 && !stdout) {
+      log.agent(`opencode done exit=${code} signal=${signal} chars=${(stdout || stderr).trim().length} duration=${elapsed}ms`)
+      if (code !== 0 && code !== null && !stdout) {
         reject(new Error(`opencode exited with code ${code}: ${stderr}`))
+      } else if (code === null && !stdout) {
+        reject(new Error(`opencode killed by signal ${signal}: ${stderr}`))
       } else {
         resolve(stdout.trim() || stderr.trim())
       }

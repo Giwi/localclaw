@@ -3,10 +3,24 @@ import type BetterSqlite3 from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
 import type { Message, Session, BackgroundTask } from './types.js'
-import { embed } from './embeddings.js'
+import { embed, cosineSimilarity } from './embeddings.js'
 import { log } from './log.js'
 
-// Simple in-memory embedding cache: content → number[]
+interface SessionRow {
+  id: string; name: string; model: string; created_at: string; updated_at: string
+}
+interface MessageRow {
+  id: string; session_id: string; role: string; content: string; created_at: string
+}
+interface BackgroundTaskRow {
+  id: string; session_id: string; name: string; schedule: string
+  tool_name: string; tool_args: string; enabled: number
+  last_run_at: string | null; next_run_at: string | null
+  last_result: string | null; last_error: string | null
+  retries: number; max_retries: number; created_at: string
+}
+interface FtsRow { rowid: number }
+
 const embedCache = new Map<string, number[]>()
 
 export function clearEmbedCache() {
@@ -106,10 +120,7 @@ export function openDb(dataDir: string): BetterSqlite3.Database {
   `)
 
   log.debug('Database schema ready')
-
-  // Backfill any embeddings computed externally
   backfillMissingEmbeddings(db)
-
   return db
 }
 
@@ -123,9 +134,9 @@ export function createSession(db: BetterSqlite3.Database, model: string, name?: 
 }
 
 export function listSessions(db: BetterSqlite3.Database): Session[] {
-  return db
+  return (db
     .prepare('SELECT id, name, model, created_at, updated_at FROM sessions ORDER BY updated_at DESC')
-    .all()
+    .all() as SessionRow[])
     .map(mapSession)
 }
 
@@ -133,7 +144,7 @@ export function getSession(db: BetterSqlite3.Database, id: string): Session | nu
   const row = db
     .prepare('SELECT id, name, model, created_at, updated_at FROM sessions WHERE id = ?')
     .get(id)
-  return row ? mapSession(row as any) : null
+  return row ? mapSession(row as SessionRow) : null
 }
 
 export function updateSessionName(db: BetterSqlite3.Database, id: string, name: string) {
@@ -179,20 +190,20 @@ export function addMessage(
 }
 
 export function getMessages(db: BetterSqlite3.Database, sessionId: string): Message[] {
-  return db
+  return (db
     .prepare(
       'SELECT id, session_id, role, content, created_at FROM messages WHERE session_id = ? ORDER BY created_at'
     )
-    .all(sessionId)
+    .all(sessionId) as MessageRow[])
     .map(mapMessage)
 }
 
-function mapSession(row: any): Session {
+function mapSession(row: SessionRow): Session {
   return { id: row.id, name: row.name, model: row.model, createdAt: row.created_at, updatedAt: row.updated_at }
 }
 
-function mapMessage(row: any): Message {
-  return { id: row.id, sessionId: row.session_id, role: row.role, content: row.content, createdAt: row.created_at }
+function mapMessage(row: MessageRow): Message {
+  return { id: row.id, sessionId: row.session_id, role: row.role as 'user' | 'assistant' | 'system', content: row.content, createdAt: row.created_at }
 }
 
 export function storeMemory(db: BetterSqlite3.Database, sessionId: string, content: string, embedding?: number[]) {
@@ -201,11 +212,12 @@ export function storeMemory(db: BetterSqlite3.Database, sessionId: string, conte
     'INSERT INTO memory_entries (id, session_id, content, embedding, created_at) VALUES (?, ?, ?, ?, ?)'
   ).run(id, sessionId, content, embedding ? JSON.stringify(embedding) : null, new Date().toISOString())
   try {
-    db.prepare('INSERT INTO memory_fts (rowid, content, session_id) VALUES (?, ?, ?)').run(
-      db.prepare('SELECT rowid FROM memory_entries WHERE id = ?').get(id) as any,
-      content,
-      sessionId,
-    )
+    const ftsRow = db.prepare('SELECT rowid FROM memory_entries WHERE id = ?').get(id) as FtsRow | undefined
+    if (ftsRow) {
+      db.prepare('INSERT INTO memory_fts (rowid, content, session_id) VALUES (?, ?, ?)').run(
+        ftsRow.rowid, content, sessionId,
+      )
+    }
   } catch { /* FTS may not be available */ }
 }
 
@@ -241,23 +253,23 @@ export function createBackgroundTask(
 }
 
 export function listBackgroundTasks(db: BetterSqlite3.Database, sessionId?: string): BackgroundTask[] {
-  let rows: any[]
+  let rows: BackgroundTaskRow[]
   if (sessionId) {
-    rows = db.prepare('SELECT * FROM background_tasks WHERE session_id = ? ORDER BY created_at DESC').all(sessionId)
+    rows = db.prepare('SELECT * FROM background_tasks WHERE session_id = ? ORDER BY created_at DESC').all(sessionId) as BackgroundTaskRow[]
   } else {
-    rows = db.prepare('SELECT * FROM background_tasks ORDER BY created_at DESC').all()
+    rows = db.prepare('SELECT * FROM background_tasks ORDER BY created_at DESC').all() as BackgroundTaskRow[]
   }
   return rows.map(mapBackgroundTask)
 }
 
 export function getBackgroundTask(db: BetterSqlite3.Database, id: string): BackgroundTask | null {
-  const row = db.prepare('SELECT * FROM background_tasks WHERE id = ?').get(id)
-  return row ? mapBackgroundTask(row as any) : null
+  const row = db.prepare('SELECT * FROM background_tasks WHERE id = ?').get(id) as BackgroundTaskRow | undefined
+  return row ? mapBackgroundTask(row) : null
 }
 
 export function updateBackgroundTask(db: BetterSqlite3.Database, id: string, updates: Partial<Pick<BackgroundTask, 'lastRunAt' | 'lastResult' | 'lastError' | 'nextRunAt' | 'enabled' | 'retries' | 'maxRetries'>>): void {
   const sets: string[] = []
-  const vals: any[] = []
+  const vals: unknown[] = []
   if (updates.lastRunAt !== undefined) { sets.push('last_run_at = ?'); vals.push(updates.lastRunAt) }
   if (updates.lastResult !== undefined) { sets.push('last_result = ?'); vals.push(updates.lastResult) }
   if (updates.lastError !== undefined) { sets.push('last_error = ?'); vals.push(updates.lastError) }
@@ -277,11 +289,11 @@ export function deleteBackgroundTask(db: BetterSqlite3.Database, id: string): vo
 export function getDueTasks(db: BetterSqlite3.Database): BackgroundTask[] {
   const rows = db.prepare(
     "SELECT * FROM background_tasks WHERE enabled = 1 AND (next_run_at IS NULL OR next_run_at <= datetime('now'))"
-  ).all()
+  ).all() as BackgroundTaskRow[]
   return rows.map(mapBackgroundTask)
 }
 
-function mapBackgroundTask(row: any): BackgroundTask {
+function mapBackgroundTask(row: BackgroundTaskRow): BackgroundTask {
   return {
     id: row.id,
     sessionId: row.session_id,
@@ -312,17 +324,18 @@ export function addKnowledgeChunk(db: BetterSqlite3.Database, documentId: string
     'INSERT INTO knowledge_chunks (id, document_id, content, embedding) VALUES (?, ?, ?, ?)'
   ).run(id, documentId, content, embedding ? JSON.stringify(embedding) : null)
   try {
-    db.prepare('INSERT INTO knowledge_fts (rowid, content, document_id) VALUES (?, ?, ?)').run(
-      db.prepare('SELECT rowid FROM knowledge_chunks WHERE id = ?').get(id) as any,
-      content,
-      documentId,
-    )
+    const ftsRow = db.prepare('SELECT rowid FROM knowledge_chunks WHERE id = ?').get(id) as FtsRow | undefined
+    if (ftsRow) {
+      db.prepare('INSERT INTO knowledge_fts (rowid, content, document_id) VALUES (?, ?, ?)').run(
+        ftsRow.rowid, content, documentId,
+      )
+    }
   } catch { /* FTS may not be available */ }
 }
 
 export function listKnowledgeDocuments(db: BetterSqlite3.Database): { id: string; name: string; type: string; size: number; createdAt: string }[] {
-  return db.prepare('SELECT id, name, type, size, created_at FROM knowledge_documents ORDER BY created_at DESC').all()
-    .map((r: any) => ({ id: r.id, name: r.name, type: r.type, size: r.size, createdAt: r.created_at }))
+  return (db.prepare('SELECT id, name, type, size, created_at FROM knowledge_documents ORDER BY created_at DESC').all() as Array<{ id: string; name: string; type: string; size: number; created_at: string }>)
+    .map((r) => ({ id: r.id, name: r.name, type: r.type, size: r.size, createdAt: r.created_at }))
 }
 
 export function deleteKnowledgeDocument(db: BetterSqlite3.Database, id: string) {
@@ -352,17 +365,6 @@ export function searchKnowledge(db: BetterSqlite3.Database, queryEmbedding: numb
   return scored.slice(0, limit)
 }
 
-function cosineSimilarity(a: number[], b: number[]): number {
-  let dot = 0, na = 0, nb = 0
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i]
-    na += a[i] * a[i]
-    nb += b[i] * b[i]
-  }
-  const denom = Math.sqrt(na) * Math.sqrt(nb)
-  return denom === 0 ? 0 : dot / denom
-}
-
 export function backfillMissingEmbeddings(db: BetterSqlite3.Database) {
   const tables = [
     { table: 'memory_entries', idField: 'id', contentField: 'content' },
@@ -379,7 +381,9 @@ export function backfillMissingEmbeddings(db: BetterSqlite3.Database) {
         if (emb.length > 0) {
           db.prepare(`UPDATE ${table} SET embedding = ? WHERE ${idField} = ?`).run(JSON.stringify(emb), row.id)
         }
-      }).catch(() => {})
+      }).catch(() => {
+        log.debug(`Failed to backfill embedding for ${table} id=${row.id}`)
+      })
     }
 
     if (rows.length > 0) log.debug(`Backfilling ${rows.length} embeddings for ${table}`)

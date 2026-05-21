@@ -83,6 +83,8 @@ export async function chatOnce(
     throw new Error(`Ollama API error: ${res.status} ${res.statusText}`)
   }
 
-  const data: OllamaChatResponse = await res.json()
+  const data: OllamaChatResponse = await res.json().catch(() => {
+    throw new Error(`Ollama API returned invalid JSON`)
+  })
   return data.message?.content || ''
 }

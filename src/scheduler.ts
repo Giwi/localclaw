@@ -68,8 +68,8 @@ export class BackgroundScheduler {
       for (const task of tasks) {
         await this.executeTask(task)
       }
-    } catch (err: any) {
-      log.agent(`Scheduler tick error: ${err.message}`)
+    } catch (err: unknown) {
+      log.agent(`Scheduler tick error: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -89,9 +89,9 @@ export class BackgroundScheduler {
     try {
       const args = JSON.parse(task.toolArgs || '{}')
       result = await tool.execute(args)
-    } catch (err: any) {
+    } catch (err: unknown) {
       result = ''
-      error = err.message
+      error = err instanceof Error ? err.message : String(err)
       log.agent(`Scheduler: task "${task.name}" FAILED: ${error}`)
     }
 

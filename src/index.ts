@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import http from 'http'
 import https from 'https'
+import { fileURLToPath } from 'url'
 import { openDb } from './db.js'
 import { createRouter } from './api.js'
 import { createWebSocket } from './ws.js'
@@ -16,9 +17,11 @@ import { loadPlugins } from './plugins.js'
 import chalk from 'chalk'
 import { log } from './log.js'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 const PORT = parseInt(process.env.LOCALCLAW_PORT || '4173', 10)
 const DATA_DIR = process.env.LOCALCLAW_DATA_DIR || path.join(process.env.HOME || '/tmp', '.localclaw')
-const CLIENT_DIR = path.resolve(import.meta.dirname, '..', 'client', 'dist', 'client', 'browser')
+const CLIENT_DIR = path.resolve(__dirname, '..', 'client', 'dist', 'client', 'browser')
 const OLLAMA_URL = process.env.LOCALCLAW_OLLAMA_URL || 'http://localhost:11434'
 const MODEL = process.env.LOCALCLAW_MODEL || 'ollama/llama3.2:3b'
 
@@ -45,11 +48,12 @@ try {
     healthy = false
   } else {
     const tags = await ollamaRes.json()
-    const models = (tags.models || []).map((m: any) => m.name)
+    const models: string[] = (tags.models || []).map((m: { name: string }) => m.name)
     log.info(`Ollama: ${OLLAMA_URL} (${models.length} models: ${models.join(', ') || 'none'})`)
   }
-} catch (err: any) {
-  log.warn(`Ollama not reachable at ${OLLAMA_URL}: ${err.message}`)
+} catch (err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err)
+  log.warn(`Ollama not reachable at ${OLLAMA_URL}: ${msg}`)
   healthy = false
 }
 
@@ -65,7 +69,7 @@ try {
   } else {
     log.info(`Embedding model "${embedModel}" available`)
   }
-} catch { /* skip */ }
+  } catch { log.debug('Embedding model check skipped (Ollama unreachable)') }
 
 if (healthy) log.info('All startup checks passed')
 else log.warn('Some startup checks failed — server will start but some features may not work')

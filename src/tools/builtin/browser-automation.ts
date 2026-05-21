@@ -74,7 +74,7 @@ export const browserAutomationTool: ToolModule = {
 
       let script = ''
       if (waitSelector) {
-        script = `(async () => { await new Promise(r => setTimeout(r, 2000)); })()`
+        script = `(async () => { const el = await new Promise(resolve => { const fi = setInterval(() => { const e = document.querySelector('${waitSelector.replace(/'/g, "\\'")}'); if (e || (typeof fi === 'number' && clearInterval(fi) && false)) { clearInterval(fi); resolve(e); } }, 100); setTimeout(() => resolve(null), 10000); }); return el ? el.textContent : document.body.innerText; })()`
       }
 
       const html = await chromiumFetch(url, script)
@@ -95,8 +95,8 @@ export const browserAutomationTool: ToolModule = {
 
       if (!clean) return `Loaded ${url} but page had no visible text content.`
       return clean
-    } catch (err: any) {
-      return `Browser automation error: ${err.message}. Try using web_fetch instead.`
+    } catch (err: unknown) {
+      return `Browser automation error: ${err instanceof Error ? err.message : String(err)}. Try using web_fetch instead.`
     }
   },
 }

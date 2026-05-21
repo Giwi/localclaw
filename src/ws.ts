@@ -24,7 +24,19 @@ import { getSession, getMessages, addMessage, updateSessionName } from './db.js'
 import { agentEventToChunk } from './types.js'
 import { log } from './log.js'
 
+interface WSMessage {
+  type: string
+  sessionId?: string
+  message?: string
+}
+
 const PING_INTERVAL = 15_000
+
+function safeSend(ws: WebSocket, data: string) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(data)
+  }
+}
 
 export function createWebSocket(server: Server, db: Database.Database, agent: Agent) {
   const wss = new WebSocketServer({ server, path: '/ws' })
@@ -34,7 +46,6 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
     let busy = false
     let pingTimer: ReturnType<typeof setInterval> | null = null
 
-    // Periodic ping to prevent idle connection drops (proxies, browsers, etc.)
     pingTimer = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.ping()
@@ -51,30 +62,29 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
     }
 
     ws.on('message', async (raw) => {
-      // Reject concurrent chat requests on the same socket.
       if (busy) {
-        ws.send(JSON.stringify({ type: 'error', error: 'session busy' }))
+        safeSend(ws, JSON.stringify({ type: 'error', error: 'session busy' }))
         return
       }
 
-      let msg: any
+      let msg: WSMessage
       try {
         msg = JSON.parse(raw.toString())
       } catch {
-        ws.send(JSON.stringify({ type: 'error', error: 'invalid JSON' }))
+        safeSend(ws, JSON.stringify({ type: 'error', error: 'invalid JSON' }))
         return
       }
 
       if (msg.type === 'chat') {
         const { sessionId, message } = msg
         if (!sessionId || !message) {
-          ws.send(JSON.stringify({ type: 'error', error: 'sessionId and message required' }))
+          safeSend(ws, JSON.stringify({ type: 'error', error: 'sessionId and message required' }))
           return
         }
 
         const session = getSession(db, sessionId)
         if (!session) {
-          ws.send(JSON.stringify({ type: 'error', error: 'Session not found' }))
+          safeSend(ws, JSON.stringify({ type: 'error', error: 'Session not found' }))
           return
         }
 
@@ -82,10 +92,8 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
         busy = true
         log.info(`WS chat  session=${session.id.slice(0, 8)} msg="${message.slice(0, 60)}${message.length > 60 ? '...' : ''}"`)
 
-        // Persist the user message immediately.
         addMessage(db, { sessionId: session.id, role: 'user', content: message })
 
-        // Rename "New Session" immediately on first message (don't wait for response).
         if (session.name === 'New Session' && message.length > 10) {
           const shortName = message.length > 50 ? message.slice(0, 50) + '...' : message
           updateSessionName(db, session.id, shortName)
@@ -102,13 +110,11 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
         const startTime = Date.now()
 
         try {
-          // Consume the agent's async generator and forward each event
-          // as a JSON chunk over the WebSocket.
           for await (const event of agent.run(session.model, ollamaMessages, session.id)) {
             if (ws.readyState !== WebSocket.OPEN) break
             eventCount++
             const chunk = agentEventToChunk(event)
-            ws.send(JSON.stringify(chunk))
+            safeSend(ws, JSON.stringify(chunk))
 
             if (event.type === 'tool_start') {
               log.sse(`tool_start ${event.toolName}`)
@@ -121,24 +127,19 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
             }
           }
 
-          // Signal completion to the client.
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'done' }))
-          }
+          safeSend(ws, JSON.stringify({ type: 'done' }))
 
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
           log.info(`Done  session=${session.id.slice(0, 8)} events=${eventCount} duration=${elapsed}s chars=${fullResponse.length}`)
 
-          // Persist the assistant's full response as a message.
           if (fullResponse) {
             addMessage(db, { sessionId: session.id, role: 'assistant', content: fullResponse })
           }
 
-        } catch (err: any) {
-          log.error(`Chat error: ${err.message}`)
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'error', error: err.message }))
-          }
+        } catch (err: unknown) {
+          const errm = err instanceof Error ? err.message : String(err)
+          log.error(`Chat error: ${errm}`)
+          safeSend(ws, JSON.stringify({ type: 'error', error: errm }))
         } finally {
           busy = false
         }

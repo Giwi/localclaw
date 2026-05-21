@@ -33,8 +33,8 @@ export async function loadPlugins(registry: ToolRegistry, dataDir: string) {
               log.info(`Plugin loaded: ${result.definition.name} (${entry.name})`)
             }
           }
-        } catch (err: any) {
-          log.warn(`Failed to load plugin ${entry.name}: ${err.message}`)
+        } catch (err: unknown) {
+          log.warn(`Failed to load plugin ${entry.name}: ${err instanceof Error ? err.message : String(err)}`)
         }
       } else if (entry.isDirectory()) {
         const pkgJson = path.join(dir, entry.name, 'package.json')
@@ -50,8 +50,8 @@ export async function loadPlugins(registry: ToolRegistry, dataDir: string) {
                 log.info(`Plugin loaded: ${tool.definition.name} (${entry.name})`)
               }
             }
-          } catch (err: any) {
-            log.warn(`Failed to load plugin directory ${entry.name}: ${err.message}`)
+          } catch (err: unknown) {
+            log.warn(`Failed to load plugin directory ${entry.name}: ${err instanceof Error ? err.message : String(err)}`)
           }
         }
       }

@@ -10,7 +10,11 @@ export function wrapCommand(command: string, cwd?: string): string {
   const workDir = cwd || process.cwd()
   log.agent(`Sandbox: wrapping command in Docker (image=${SANDBOX_IMAGE})`)
 
-  const safeCommand = command.replace(/"/g, '\\"')
+  const safeCommand = command
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, '\\$')
+    .replace(/`/g, '\\`')
   return [
     'docker run --rm --network none',
     '--security-opt no-new-privileges --cap-drop ALL',

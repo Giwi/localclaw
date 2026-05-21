@@ -1,4 +1,4 @@
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import type { ToolModule } from '../types.js'
 import { log } from '../../log.js'
 import fs from 'fs'
@@ -34,21 +34,27 @@ export const generateImageTool: ToolModule = {
 
     fs.mkdirSync(DOWNLOADS_DIR, { recursive: true })
 
-    const response = execSync(`curl -s -X POST ${OLLAMA_BASE}/api/generate -d '{
-      "model": "${model}",
-      "prompt": "${prompt.replace(/"/g, '\\"')}",
-      "stream": false,
-      "options": { "size": "${size}" }
-    }'`, { encoding: 'utf-8', timeout: 120000 })
+    const body = JSON.stringify({
+      model,
+      prompt,
+      stream: false,
+      options: { size },
+    })
+    const response = execFileSync('curl', ['-s', '-X', 'POST', `${OLLAMA_BASE}/api/generate`, '-d', body], { encoding: 'utf-8', timeout: 120000 })
 
-    const data = JSON.parse(response)
+    let data: { response?: string }
+    try {
+      data = JSON.parse(response)
+    } catch {
+      return `Image generation failed: Ollama returned non-JSON response.`
+    }
 
     if (data.response && data.response.startsWith('/')) {
       const src = data.response
       const ext = path.extname(src) || '.png'
       const name = crypto.randomUUID() + ext
       const dest = path.join(DOWNLOADS_DIR, name)
-      execSync(`cp "${src}" "${dest}"`, { encoding: 'utf-8' })
+      execFileSync('cp', [src, dest], { encoding: 'utf-8' })
       const port = process.env.LOCALCLAW_PORT || '4173'
       return `Image generated: http://localhost:${port}/downloads/${name}\nPrompt: ${prompt}`
     }

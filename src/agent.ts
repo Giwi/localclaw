@@ -73,6 +73,12 @@ interface OllamaTool {
   }
 }
 
+interface ChatMessage {
+  role: string
+  content: string
+  tool_calls?: Array<{ function: { name: string; arguments: string } }>
+}
+
 interface OllamaResponseMessage {
   role: string
   content?: string
@@ -209,12 +215,14 @@ export class Agent {
       log.agent(`Pre-plan round ${round + 1}/${maxRounds} (${prompts.length} prompts)`)
 
       const opencodeResults = await Promise.allSettled(
-        prompts.map((p) =>
-          Promise.race([
-            runOpencodeTask(p),
+        prompts.map((p) => {
+          const taskPromise = runOpencodeTask(p)
+          taskPromise.catch(() => { /* suppress unhandled rejection on timeout */ })
+          return Promise.race([
+            taskPromise,
             new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT)),
           ])
-        )
+        })
       )
 
       for (const settled of opencodeResults) {
@@ -255,8 +263,8 @@ export class Agent {
         return trimmed
       }
       log.agent(`Dynamic answer too short (${trimmed.length}ch): "${trimmed.slice(0, 80)}"`)
-    } catch (err: any) {
-      log.agent(`Dynamic answer failed: ${err.message}`)
+    } catch (err: unknown) {
+      log.agent(`Dynamic answer failed: ${err instanceof Error ? err.message : String(err)}`)
     }
     return null
   }
@@ -390,7 +398,7 @@ export class Agent {
       content: 'Your previous attempt did not find useful results. Try a completely different approach — different search query (shorter, fewer quotes), fetch the site URL directly, or use a different tool. Do NOT repeat the same query. / Votre tentative précédente n\'a pas donné de résultats. Essayez une approche complètement différente.',
     }
 
-    let apiMessages: any[] = [systemMsg, ...history]
+    let apiMessages: ChatMessage[] = [systemMsg, ...history]
 
     // ---- Loop state ----
     let forceTool = false          // When true, the model MUST call a tool or its text is force-yielded.
@@ -431,7 +439,7 @@ export class Agent {
 
               // Ask Ollama to present the answer in the user's language.
               yield { type: 'status', content: 'Formatting response...' }
-              const formatMessages: any[] = [
+              const formatMessages: ChatMessage[] = [
                 ...apiMessages,
                 { role: 'assistant', content: `Answer the user's question in their language based on this data. Be concise:\n\n${prePlanResult.slice(0, 4000)}` },
               ]
@@ -505,8 +513,8 @@ export class Agent {
             log.agent(`Pre-plan: no direct solution, entering agent loop`)
           }
 
-        } catch (err: any) {
-          log.agent(`Pre-plan error: ${err.message}`)
+        } catch (err: unknown) {
+          log.agent(`Pre-plan error: ${err instanceof Error ? err.message : String(err)}`)
         }
       }
     }
@@ -516,7 +524,7 @@ export class Agent {
       log.agent(`Loop ${loop + 1}/${MAX_TOOL_LOOPS}  history=${apiMessages.length}msgs`)
       yield { type: 'status', content: loop === 0 ? 'Thinking...' : `Thinking (step ${loop + 1})...` }
 
-      const body: any = {
+      const body: Record<string, unknown> = {
         model: this.modelId(model),
         messages: apiMessages,
         stream: false,
@@ -553,7 +561,7 @@ export class Agent {
       const responseLog = JSON.stringify({
         model: body.model,
         content: content.slice(0, 200),
-        tool_calls: toolCalls?.map((tc: any) => ({
+        tool_calls: toolCalls?.map((tc) => ({
           name: tc.function?.name,
           args: typeof tc.function?.arguments === 'string'
             ? tc.function.arguments.slice(0, 150)
@@ -711,9 +719,9 @@ export class Agent {
       for (const tc of toolCalls) {
         const toolName = tc.function.name
         const toolRunId = crypto.randomUUID()
-        let args: Record<string, any> = {}
+        let args: Record<string, unknown> = {}
         if (typeof tc.function.arguments === 'object' && tc.function.arguments !== null) {
-          args = tc.function.arguments as Record<string, any>
+          args = tc.function.arguments as Record<string, unknown>
         } else {
           try {
             args = JSON.parse(tc.function.arguments)
@@ -739,7 +747,7 @@ export class Agent {
           // the tool is running, so long-running tools feel responsive.
           const chunkQueue: string[] = []
           const onChunk = (chunk: string) => { chunkQueue.push(chunk) }
-          const toolArgs = sessionId ? { ...args, _sessionId: sessionId } : args
+          const toolArgs: Record<string, unknown> = sessionId ? { ...args as Record<string, unknown>, _sessionId: sessionId } : args
           const toolPromise = tool.execute(toolArgs, onChunk)
 
           let result: string | undefined
@@ -767,7 +775,7 @@ export class Agent {
 
           // Remove dynamic tools that returned nothing so the model
           // can't loop on a broken tool.
-          if (result.length === 0 && toolName.startsWith('tool_')) {
+          if (result.length === 0 && this.toolRegistry.isDynamic(toolName)) {
             log.agent(`Removing failed dynamic tool "${toolName}" (0ch result)`)
             this.toolRegistry.unregister(toolName)
             tools = this.buildToolDefs()
@@ -796,16 +804,17 @@ export class Agent {
             toolResult: result,
             durationMs: Date.now() - t1,
           })
-        } catch (err: any) {
-          log.agent(`Tool ${toolName} FAILED: ${err.message}`)
-          yield { type: 'tool_error', toolName, toolRunId, error: err.message }
-          lastToolResult = `Error: ${err.message}`
-          apiMessages.push({ role: 'tool', content: `Error: ${err.message}` })
+        } catch (err: unknown) {
+          const errm = err instanceof Error ? err.message : String(err)
+          log.agent(`Tool ${toolName} FAILED: ${errm}`)
+          yield { type: 'tool_error', toolName, toolRunId, error: errm }
+          lastToolResult = `Error: ${errm}`
+          apiMessages.push({ role: 'tool', content: `Error: ${errm}` })
           addToolCall(this.db, {
             sessionId: sessionId || null,
             toolName,
             toolArgs: JSON.stringify(args),
-            toolError: err.message,
+            toolError: errm,
             durationMs: Date.now() - t1,
           })
         }

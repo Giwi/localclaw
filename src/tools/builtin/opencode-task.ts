@@ -19,8 +19,8 @@ export const opencodeTaskTool: ToolModule = {
     try {
       const result = await runOpencodeTask(task as string)
       return result || '(OpenCode completed with no output)'
-    } catch (err: any) {
-      return `OpenCode task failed: ${err.message}`
+    } catch (err: unknown) {
+      return `OpenCode task failed: ${err instanceof Error ? err.message : String(err)}`
     }
   },
 }

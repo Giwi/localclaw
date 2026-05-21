@@ -36,8 +36,8 @@ export const writeFileTool: ToolModule = {
       fs.mkdirSync(path.dirname(resolved), { recursive: true })
       fs.writeFileSync(resolved, content, 'utf-8')
       return `File written: ${filePath} (${content.length} bytes)`
-    } catch (err: any) {
-      return `Error writing file: ${err.message}`
+    } catch (err: unknown) {
+      return `Error writing file: ${err instanceof Error ? err.message : String(err)}`
     }
   },
 }

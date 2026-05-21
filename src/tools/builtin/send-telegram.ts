@@ -63,8 +63,8 @@ Alternatively, if you already know your chat_id, you can use it directly in send
           ([id, info]) => `- ${info.title} (${info.type}): chat_id = ${id}`
         )
         return `Found ${chats.size} chat(s):\n${lines.join('\n')}\n\nUse the chat_id with send_telegram({action:"send", chat_id:"...", text:"..."})`
-      } catch (err: any) {
-        return `Failed to fetch updates: ${err.message}`
+      } catch (err: unknown) {
+        return `Failed to fetch updates: ${err instanceof Error ? err.message : String(err)}`
       }
     }
 
@@ -101,8 +101,8 @@ Alternatively, if you already know your chat_id, you can use it directly in send
           }
           return `Failed to send: ${hint}`
         }
-      } catch (err: any) {
-        return `Telegram API error: ${err.message}`
+      } catch (err: unknown) {
+        return `Telegram API error: ${err instanceof Error ? err.message : String(err)}`
       }
     }
 

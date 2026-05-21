@@ -1,12 +1,9 @@
-import { execSync } from 'child_process'
-import type { ExecSyncOptions } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import type { ToolModule } from '../types.js'
 import { log } from '../../log.js'
-
-const EXEC_OPTS: ExecSyncOptions = { encoding: 'utf-8', timeout: 15000, shell: '/bin/bash' }
 
 const HOME = process.env.HOME || '/tmp'
 const DATA_DIR = process.env.LOCALCLAW_DATA_DIR || path.join(HOME, '.localclaw')
@@ -35,7 +32,7 @@ function downloadFile(url: string, dir: string): { filePath: string; fileName: s
   const name = crypto.randomUUID() + ext
   const filePath = path.join(dir, name)
   try {
-    execSync(`curl -sL --max-time 30 -o "${filePath}" "${url}"`, EXEC_OPTS)
+    execFileSync('curl', ['-sL', '--max-time', '30', '-o', filePath, url], { encoding: 'utf-8', timeout: 15000 })
     if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) return null
     return { filePath, fileName: name, ext }
   } catch { return null }
@@ -52,7 +49,7 @@ async function searchSearxng(query: string, category: string = 'general'): Promi
   try {
     const url = `${SEARXNG_URL}/search?format=json&q=${encodeURIComponent(query)}${category === 'images' ? '&categories=images' : ''}`
     log.sse(`SearXNG request: ${url}`)
-    const out = execSync(`curl -sL --max-time 10 -H "Accept: application/json" "${url}"`, EXEC_OPTS) as string
+    const out = execFileSync('curl', ['-sL', '--max-time', '10', '-H', 'Accept: application/json', url], { encoding: 'utf-8', timeout: 15000 }) as string
     const trimmed = out.trim()
     log.sse(`SearXNG response (${trimmed.length} chars): ${trimmed.slice(0, 200)}`)
     const data = JSON.parse(trimmed)
@@ -138,7 +135,19 @@ async function fetchUrl(url: string, mode: string): Promise<string> {
     return `Invalid URL: "${url}".`
   }
   try {
-    execSync(`host "${parsedUrl.hostname}" 2>/dev/null || dig +short "${parsedUrl.hostname}" 2>/dev/null || nslookup "${parsedUrl.hostname}" 2>/dev/null`, { ...EXEC_OPTS, timeout: 5000 })
+    const hostname = parsedUrl.hostname
+    let resolved = false
+    for (const cmd of ['host', 'dig'] as const) {
+      try {
+        const args = cmd === 'host' ? [hostname] : ['+short', hostname]
+        execFileSync(cmd, args, { encoding: 'utf-8', timeout: 5000 })
+        resolved = true
+        break
+      } catch {}
+    }
+    if (!resolved) {
+      return `Cannot resolve domain "${hostname}" — this domain does not exist.`
+    }
   } catch {
     return `Cannot resolve domain "${parsedUrl.hostname}" — this domain does not exist.`
   }
@@ -159,7 +168,7 @@ async function fetchUrl(url: string, mode: string): Promise<string> {
   }
 
   try {
-    const html = (execSync(`curl -sL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0" "${url}"`, EXEC_OPTS) as string).trim()
+    const html = (execFileSync('curl', ['-sL', '--max-time', '15', '-A', 'Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0', url], { encoding: 'utf-8', timeout: 15000 }) as string).trim()
     if (!html) return `Fetched ${url} but got empty response.`
 
     if (mode === 'images') {
@@ -182,15 +191,16 @@ async function fetchUrl(url: string, mode: string): Promise<string> {
     const images = extractImages(html)
     const imgSection = images.length > 0 ? `\n\nImages found:\n${images.join('\n')}` : ''
     return `${clean}${imgSection}`
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errm = err instanceof Error ? err.message : String(err)
     if (SEARXNG_URL) {
-      return `Failed to fetch ${url}. Error: ${err.message}`
+      return `Failed to fetch ${url}. Error: ${errm}`
     }
     try {
-      const fallback = (execSync(`curl -sL --max-time 10 "https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(url)}"`, EXEC_OPTS) as string).trim()
-      return fallback.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000) || `Failed to fetch ${url}: ${err.message}`
+      const fallback = (execFileSync('curl', ['-sL', '--max-time', '10', `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(url)}`], { encoding: 'utf-8', timeout: 15000 }) as string).trim()
+      return fallback.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000) || `Failed to fetch ${url}: ${errm}`
     } catch {
-      return `Failed to fetch ${url}: ${err.message}`
+      return `Failed to fetch ${url}: ${errm}`
     }
   }
 }
