@@ -36,7 +36,7 @@ services:
     restart: unless-stopped
 
   localclaw:
-    build: .
+    image: ${LOCALCLAW_IMAGE:-ghcr.io/giwi/localclaw:latest}
     container_name: localclaw
     ports:
       - "${LOCALCLAW_PORT:-4173}:4173"

@@ -44,8 +44,8 @@ localclaw/
 ├── searxng/
 │   └── settings.yml        # SearXNG config (JSON API + image proxy)
 ├── plugins/                # Bundled plugin directory
-├── docker-compose.yml      # Ollama + SearXNG + localclaw stack
-├── Dockerfile              # Production build
+├── compose.yml             # Ollama + SearXNG + localclaw stack
+├── Containerfile           # Production build
 ├── .env                    # Configuration (gitignored)
 ├── .env.example            # Documented configuration template
 ```

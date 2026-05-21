@@ -1,0 +1,12 @@
+node_modules/
+.git/
+.env
+dist/
+~/
+*.md
+.gitignore
+AGENTS.md
+client/node_modules/
+client/dist/
+client/proxy.conf.js
+LICENCE
