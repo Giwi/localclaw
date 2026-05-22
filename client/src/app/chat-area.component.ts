@@ -131,7 +131,7 @@ export class ChatAreaComponent implements OnChanges {
     const nowLine = lines.find(l => l.startsWith('Now:'))
     const currentTemp = nowLine?.match(/Now:\s*([\d.-]+)°C/)?.at(1) || ''
     const feelsLike = nowLine?.match(/feels like ([\d.-]+)°C/)?.at(1) || ''
-    const condition = nowLine?.match(/°C[,\s]+\s*(.+)$/)?.at(1)?.trim() || ''
+    const condition = nowLine?.match(/°C[,\s]+\s*(?:\([^)]*\)[,\s]*)?(.+)$/)?.at(1)?.trim() || ''
 
     const detailLine = lines.find(l => l.startsWith('Humidity:'))
     const humidity = detailLine?.match(/Humidity:\s*([\d.]+%)/)?.at(1) || ''

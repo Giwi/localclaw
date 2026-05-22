@@ -47,14 +47,14 @@ export const weatherTool: ToolModule = {
       type: 'object',
       properties: {
         location: { type: 'string', description: 'City name (e.g. "Paris", "London", "Tokyo") or "lat,lon" coordinates' },
-        days: { type: 'string', description: 'Forecast range: "current" = now only, "today" = current + today\'s daily, or a number (1-7) for N-day forecast including today. For tomorrow use "2", for 3-day use "3", etc. Default: "today".' },
+        days: { type: 'string', description: 'Number of forecast days: 1-7 (default "3"). Always returns current conditions + N-day daily forecast. For tomorrow use "2", for this week use "7".' },
       },
       required: ['location'],
     },
   },
   execute: async (args, onChunk) => {
     const location = (args.location || '').trim()
-    const days = (args.days || 'current').trim().toLowerCase()
+    const days = (args.days || '3').trim().toLowerCase()
 
     if (!location) return 'Please provide a "location" (city name or lat,lon).'
 
@@ -80,12 +80,8 @@ export const weatherTool: ToolModule = {
     const currentParams = 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,pressure_msl,uv_index'
     let url: string
 
-    if (days === 'current' || days === 'today') {
-      url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=${currentParams}&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=${days === 'today' ? 1 : 1}`
-    } else {
-      const n = Math.min(Math.max(parseInt(days) || 3, 1), 7)
-      url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=${currentParams}&daily=temperature_2m_max,temperature_2m_min,weather_code,wind_speed_10m_max&timezone=auto&forecast_days=${n}`
-    }
+    const n = Math.min(Math.max(parseInt(days) || 3, 1), 7)
+    url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=${currentParams}&daily=temperature_2m_max,temperature_2m_min,weather_code,wind_speed_10m_max&timezone=auto&forecast_days=${n}`
 
     try {
       const res = await fetchWithUA(url, 15000)
@@ -110,18 +106,10 @@ export const weatherTool: ToolModule = {
       if (data.daily) {
         const d = data.daily
         result += `\n`
-        const todayStr = new Date().toISOString().slice(0, 10)
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
         for (let i = 0; i < d.time.length; i++) {
-          let day: string
-          if (d.time[i] === todayStr) {
-            day = 'Today'
-          } else if (i === 1) {
-            day = 'Tomorrow'
-          } else {
-            const dt = new Date(d.time[i])
-            day = dayNames[dt.getUTCDay()] || d.time[i]
-          }
+          const dt = new Date(d.time[i] + 'T12:00:00Z')
+          const day = dayNames[dt.getUTCDay()] || d.time[i]
           const wc = WEATHER_CODES[d.weather_code[i]] || `Code ${d.weather_code[i]}`
           result += `\n${day}: ${d.temperature_2m_min[i]}–${d.temperature_2m_max[i]}°C, ${wc}`
         }
