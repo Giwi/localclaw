@@ -82,6 +82,7 @@
         <!-- Tool events -->
         @for (ev of toolEvents; track ev.id) {
           <div class="message-enter mb-3" style="max-width:100%;">
+            <!-- Tool card (compact header-only for weather) -->
             <div class="tool-card" [class.active]="ev.type === 'tool_start' || ev.type === 'tool_chunk'" style="background:var(--bg-tool);color:#e5e7eb;border-color:rgba(255,255,255,.1);">
               @if (ev.type === 'tool_start' || ev.type === 'tool_chunk') {
                 <div class="tool-card-header" (click)="toggleToolEvent.emit(ev.id)" style="cursor:pointer;">
@@ -104,96 +105,24 @@
                   <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'"><i class="bi bi-chevron-right"></i></span>
                 </div>
                 @if (ev.expanded && ev.toolResult) {
-                  @let weather = ev.toolName === 'weather' ? parseWeatherResult(ev.toolResult) : null;
-                  @if (weather) {
-                    <div style="padding:16px 20px;border-top:1px solid var(--glass-border);">
-                      <!-- Location -->
-                      <div style="text-align:center;margin-bottom:4px;font-size:13px;color:var(--text-sidebar-muted);">{{ weather.city }}</div>
-                      <!-- Current temp + condition -->
-                      <div style="text-align:center;margin-bottom:8px;">
-                        <span style="font-size:48px;line-height:1;">{{ weatherEmoji(weather.condition) }}</span>
-                        <span style="font-size:42px;font-weight:600;color:#e8edf5;margin-left:8px;">{{ weather.currentTemp }}°</span>
-                      </div>
-                      <div style="text-align:center;font-size:14px;color:var(--text-sidebar);margin-bottom:4px;">{{ weather.condition }}</div>
-                      @if (weather.feelsLike) {
-                        <div style="text-align:center;font-size:12px;color:var(--text-sidebar-muted);margin-bottom:12px;">Feels like {{ weather.feelsLike }}°</div>
-                      }
-                      <!-- Details row -->
-                      <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin-bottom:12px;padding:10px;border-radius:var(--radius-sm);background:rgba(255,255,255,.04);">
-                        @if (weather.humidity) {
-                          <div style="text-align:center;min-width:60px;">
-                            <div style="font-size:18px;margin-bottom:2px;">💧</div>
-                            <div style="font-size:11px;color:var(--text-sidebar-muted);">Humidity</div>
-                            <div style="font-size:13px;color:var(--text-sidebar);">{{ weather.humidity }}</div>
-                          </div>
-                        }
-                        @if (weather.wind) {
-                          <div style="text-align:center;min-width:60px;">
-                            <div style="font-size:18px;margin-bottom:2px;">💨</div>
-                            <div style="font-size:11px;color:var(--text-sidebar-muted);">Wind</div>
-                            <div style="font-size:13px;color:var(--text-sidebar);">{{ weather.wind }}</div>
-                          </div>
-                        }
-                        @if (weather.pressure) {
-                          <div style="text-align:center;min-width:60px;">
-                            <div style="font-size:18px;margin-bottom:2px;">📊</div>
-                            <div style="font-size:11px;color:var(--text-sidebar-muted);">Pressure</div>
-                            <div style="font-size:13px;color:var(--text-sidebar);">{{ weather.pressure }}</div>
-                          </div>
-                        }
-                        @if (weather.uv) {
-                          <div style="text-align:center;min-width:60px;">
-                            <div style="font-size:18px;margin-bottom:2px;">☀️</div>
-                            <div style="font-size:11px;color:var(--text-sidebar-muted);">UV Index</div>
-                            <div style="font-size:13px;color:var(--text-sidebar);">{{ weather.uv }}</div>
-                          </div>
-                        }
-                      </div>
-                      <!-- Forecast -->
-                      @if (weather.forecast.length > 0) {
-                        <div style="border-top:1px solid var(--glass-border);padding-top:10px;">
-                          <div style="font-size:11px;font-weight:600;color:var(--text-sidebar-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Forecast</div>
-                          @for (day of weather.forecast; track day.day) {
-                            <div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);">
-                              <span style="flex:0 0 80px;font-size:13px;font-weight:500;color:var(--text-sidebar);">{{ day.day }}</span>
-                              <span style="font-size:16px;margin-right:8px;">{{ weatherEmoji(day.condition) }}</span>
-                              <span style="flex:1;font-size:12px;color:var(--text-sidebar-muted);"> {{ day.condition }}</span>
-                              <span style="font-size:13px;font-weight:500;color:var(--text-sidebar);">{{ day.min }}–{{ day.max }}°</span>
-                            </div>
-                          }
-                        </div>
-                      }
-                      <!-- Raw data toggle -->
+                  <div class="tool-card-body" style="color:#9ca3af;border-color:rgba(255,255,255,.08);position:relative;">
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:4px;">
                       <button
-                        (click)="ev.expandedMore = !ev.expandedMore; $event.stopPropagation()"
-                        style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:11px;padding:6px 0 0;width:100%;text-align:center;opacity:.6;"
-                      >{{ ev.expandedMore ? 'Hide' : 'Show' }} raw data</button>
-                      @if (ev.expandedMore) {
-                        <div style="margin-top:8px;padding:8px;border-radius:var(--radius-sm);background:rgba(0,0,0,.2);font-size:11px;color:var(--text-sidebar-muted);white-space:pre-wrap;font-family:monospace;">
-                          {{ ev.toolResult }}
-                        </div>
-                      }
+                        (click)="copyText.emit(ev.toolResult!)"
+                        style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;transition:background .15s;"
+                        title="Copy result"
+                      ><i class="bi bi-clipboard"></i></button>
                     </div>
-                  } @else {
-                    <div class="tool-card-body" style="color:#9ca3af;border-color:rgba(255,255,255,.08);position:relative;">
-                      <div style="display:flex;justify-content:flex-end;margin-bottom:4px;">
-                        <button
-                          (click)="copyText.emit(ev.toolResult!)"
-                          style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;transition:background .15s;"
-                          title="Copy result"
-                        ><i class="bi bi-clipboard"></i></button>
-                      </div>
-                      @if (!ev.expandedMore && hasMoreLines(ev.toolResult)) {
-                        <div [innerHTML]="truncateResult(ev.toolResult) | markdown | async"></div>
-                        <button
-                          (click)="ev.expandedMore = true; $event.stopPropagation()"
-                          style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;padding:4px 0;width:100%;text-align:center;"
-                        >Show all ({{ ev.toolResult.split('\n').length }} lines)</button>
-                      } @else {
-                        <div [innerHTML]="ev.toolResult | markdown | async"></div>
-                      }
-                    </div>
-                  }
+                    @if (!ev.expandedMore && hasMoreLines(ev.toolResult)) {
+                      <div [innerHTML]="truncateResult(ev.toolResult) | markdown | async"></div>
+                      <button
+                        (click)="ev.expandedMore = true; $event.stopPropagation()"
+                        style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;padding:4px 0;width:100%;text-align:center;"
+                      >Show all ({{ ev.toolResult.split('\n').length }} lines)</button>
+                    } @else {
+                      <div [innerHTML]="ev.toolResult | markdown | async"></div>
+                    }
+                  </div>
                 }
               }
               @if (ev.type === 'tool_error') {
@@ -210,6 +139,76 @@
                 }
               }
             </div>
+            <!-- Weather widget (styled as assistant message) -->
+            @if (ev.type === 'tool_end' && ev.toolName === 'weather' && ev.toolResult) {
+              @let w = parseWeatherResult(ev.toolResult);
+              @if (w) {
+                <div class="message-enter d-flex mb-4" style="margin-top:8px;">
+                  <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;margin-top:4px;margin-right:10px;">L</div>
+                  <div style="max-width:75%;">
+                    <div class="message-content" style="background:var(--bg-bubble-assistant);color:var(--text-bubble-assistant);border:1px solid var(--border-color);border-radius:var(--radius-lg);border-bottom-left-radius:4px;overflow:hidden;box-shadow:var(--shadow-sm);font-size:14px;line-height:1.6;">
+                      <!-- Header -->
+                      <div style="text-align:center;padding:16px 18px 2px;">
+                        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:2px;">{{ w.city }}</div>
+                        <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+                          <span style="font-size:40px;line-height:1;">{{ weatherEmoji(w.condition) }}</span>
+                          <span style="font-size:34px;font-weight:600;">{{ w.currentTemp }}°</span>
+                        </div>
+                        <div style="margin-top:2px;">{{ w.condition }}</div>
+                        @if (w.feelsLike) {
+                          <div style="font-size:12px;color:var(--text-secondary);">Feels like {{ w.feelsLike }}°</div>
+                        }
+                      </div>
+                      <!-- Details -->
+                      <div style="display:flex;justify-content:center;gap:14px;flex-wrap:wrap;padding:8px 14px;margin:6px 12px;border-radius:var(--radius-sm);background:var(--bg-primary);">
+                        @if (w.humidity) {
+                          <div style="text-align:center;min-width:50px;">
+                            <div style="font-size:15px;">💧</div>
+                            <div style="font-size:10px;color:var(--text-secondary);margin-top:1px;">Humidity</div>
+                            <div style="font-size:12px;font-weight:500;">{{ w.humidity }}</div>
+                          </div>
+                        }
+                        @if (w.wind) {
+                          <div style="text-align:center;min-width:50px;">
+                            <div style="font-size:15px;">💨</div>
+                            <div style="font-size:10px;color:var(--text-secondary);margin-top:1px;">Wind</div>
+                            <div style="font-size:12px;font-weight:500;">{{ w.wind }}</div>
+                          </div>
+                        }
+                        @if (w.pressure) {
+                          <div style="text-align:center;min-width:50px;">
+                            <div style="font-size:15px;">📊</div>
+                            <div style="font-size:10px;color:var(--text-secondary);margin-top:1px;">Pressure</div>
+                            <div style="font-size:12px;font-weight:500;">{{ w.pressure }}</div>
+                          </div>
+                        }
+                        @if (w.uv) {
+                          <div style="text-align:center;min-width:50px;">
+                            <div style="font-size:15px;">☀️</div>
+                            <div style="font-size:10px;color:var(--text-secondary);margin-top:1px;">UV</div>
+                            <div style="font-size:12px;font-weight:500;">{{ w.uv }}</div>
+                          </div>
+                        }
+                      </div>
+                      <!-- Forecast -->
+                      @if (w.forecast.length > 0) {
+                        <div style="padding:0 14px 10px;">
+                          <div style="font-size:10px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Forecast</div>
+                          @for (day of w.forecast; track day.day) {
+                            <div style="display:flex;align-items:center;padding:4px 0;border-bottom:1px solid var(--border-color);">
+                              <span style="flex:0 0 65px;font-size:12px;font-weight:500;">{{ day.day }}</span>
+                              <span style="font-size:13px;margin-right:4px;">{{ weatherEmoji(day.condition) }}</span>
+                              <span style="flex:1;font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ day.condition }}</span>
+                              <span style="font-size:12px;font-weight:500;white-space:nowrap;">{{ day.min }}–{{ day.max }}°</span>
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+            }
           </div>
         }
 

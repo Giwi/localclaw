@@ -1,5 +1,6 @@
 import type { ToolModule } from '../types.js'
 
+const UA = 'localclaw/0.1 (weather-tool)'
 const WEATHER_CODES: Record<number, string> = {
   0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
   45: 'Fog', 48: 'Depositing rime fog',
@@ -14,16 +15,28 @@ const WEATHER_CODES: Record<number, string> = {
   95: 'Thunderstorm', 96: 'Thunderstorm with slight hail', 99: 'Thunderstorm with heavy hail',
 }
 
+function fetchWithUA(url: string, timeout = 10000): Promise<Response> {
+  return fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(timeout) })
+}
+
+function locName(r: { name: string; admin1?: string; country?: string }): string {
+  const parts: string[] = [r.name]
+  if (r.admin1 && r.admin1 !== r.name) parts.push(r.admin1)
+  if (r.country && r.country !== r.name && r.country !== r.admin1) parts.push(r.country)
+  return parts.join(', ')
+}
+
 async function geocode(location: string): Promise<{ lat: number; lon: number; name: string } | string> {
-  const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=5&language=en&format=json`, {
-    signal: AbortSignal.timeout(10000),
-  })
-  if (!res.ok) return `Geocoding API error: ${res.status}`
+  const res = await fetchWithUA(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=5&language=en&format=json`)
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    return `Geocoding API error ${res.status}${body ? ': ' + body.slice(0, 100) : ''}`
+  }
   const data = await res.json()
   const results = data.results
   if (!results || results.length === 0) return `Location "${location}" not found.`
   const r = results[0]
-  return { lat: r.latitude, lon: r.longitude, name: `${r.name}, ${r.admin1 || r.country || ''}` }
+  return { lat: r.latitude, lon: r.longitude, name: locName(r) }
 }
 
 export const weatherTool: ToolModule = {
@@ -75,8 +88,12 @@ export const weatherTool: ToolModule = {
     }
 
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
-      if (!res.ok) return `Weather API error: ${res.status}`
+      const res = await fetchWithUA(url, 15000)
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        if (res.status === 403) return `Weather API error: 403 — request blocked. The free Open-Meteo API may have rate-limited this IP. Try again in a few seconds.`
+        return `Weather API error ${res.status}${body ? ': ' + body.slice(0, 100) : ''}`
+      }
       const data = await res.json()
 
       let result = `Weather for ${displayName}\n`
@@ -86,8 +103,8 @@ export const weatherTool: ToolModule = {
         const wCode = WEATHER_CODES[c.weather_code] || `Code ${c.weather_code}`
         result += `\nNow: ${c.temperature_2m}°C (feels like ${c.apparent_temperature}°C), ${wCode}`
         result += `\nHumidity: ${c.relative_humidity_2m}% | Wind: ${c.wind_speed_10m} km/h`
-        if (c.pressure_msl) result += ` | Pressure: ${c.pressure_msl} hPa`
-        if (c.uv_index !== undefined) result += ` | UV: ${c.uv_index}`
+        if (c.pressure_msl !== undefined && c.pressure_msl !== null) result += ` | Pressure: ${c.pressure_msl} hPa`
+        if (c.uv_index !== undefined && c.uv_index !== null) result += ` | UV: ${c.uv_index}`
       }
 
       if (data.daily) {
