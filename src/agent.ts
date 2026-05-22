@@ -234,6 +234,70 @@ Query: "${query.slice(0, 200)}"`,
   }
 
   /**
+   * Ask Ollama to decompose a complex query into a numbered plan of
+   * sub-tasks, each assigned to the best tool.  Runs before the main
+   * agent loop so the agent executes each step deliberately instead of
+   * trial-and-error.
+   */
+  private async planWithOllama(query: string, model: string, toolList: string): Promise<{ description: string; toolName: string; toolArgs: Record<string, unknown> }[]> {
+    try {
+      const res = await fetch(`${OLLAMA_BASE}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.modelId(model),
+          prompt: `You are a task planner. Decompose the user's request into numbered steps. For each step, specify which tool to use and its arguments. Available tools:\n\n${toolList}\n\nUser request: "${query.slice(0, 1000)}"\n\nOutput format (strict):\nSTEP N: short description (one line)\nTOOL: tool_name(key="value", ...)\n\nRules:\n- Use ONLY tools from the list above\n- If no tool fits a step, write TOOL: none\n- Make every step actionable — what to do, not how to explain\n- Keep the plan to 5 steps maximum\n\nPlan:`,
+          stream: false,
+          options: { num_ctx: 4096, temperature: 0.1 },
+        }),
+        signal: AbortSignal.timeout(30_000),
+      })
+      if (!res.ok) return []
+      const data = await res.json()
+      const text = (data.response || '').trim()
+      if (!text) return []
+
+      // Parse STEP/TOOL pairs
+      const steps: { description: string; toolName: string; toolArgs: Record<string, unknown> }[] = []
+      const lines = text.split('\n')
+      let currentDesc = ''
+      for (const line of lines) {
+        const stepMatch = line.match(/^STEP\s*\d+:?\s*(.+)/i)
+        if (stepMatch) {
+          currentDesc = stepMatch[1].trim()
+          continue
+        }
+        const toolMatch = line.match(/^TOOL:\s*(\w+)\((.+)\)/i)
+        if (toolMatch && currentDesc) {
+          const toolName = toolMatch[1].trim()
+          const rawArgs = toolMatch[2].trim()
+          let toolArgs: Record<string, unknown> = {}
+          try {
+            const pairs = rawArgs.match(/(\w+)\s*=\s*("([^"]*)"|'([^']*)'|([^,]+))/g)
+            if (pairs) {
+              for (const pair of pairs) {
+                const m = pair.match(/(\w+)\s*=\s*("([^"]*)"|'([^']*)'|(.+))/)
+                if (m) {
+                  const val = (m[3] ?? m[4] ?? m[5] ?? '').trim()
+                  const num = Number(val)
+                  toolArgs[m[1]] = isNaN(num) || val === '' ? val : num
+                }
+              }
+            }
+          } catch { /* keep empty args */ }
+          if (toolName.toLowerCase() !== 'none') {
+            steps.push({ description: currentDesc, toolName, toolArgs })
+          }
+          currentDesc = ''
+        }
+      }
+      return steps
+    } catch {
+      return []
+    }
+  }
+
+  /**
    * Ask OpenCode to answer the user's question directly.
    *
    * Runs multiple prompts in parallel across 2 rounds.  OpenCode is a capable
@@ -569,6 +633,60 @@ Query: "${query.slice(0, 200)}"`,
 
         } catch (err: unknown) {
           log.agent(`Pre-plan error: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+    }
+
+    // ---- AI Planning: decompose complex queries into sub-tasks ----
+    // For first messages that need multiple tools or research, ask Ollama
+    // to create a plan, execute each step, then let the agent loop synthesize.
+    {
+      const hasHistory = messages.some((m) => m.role === 'assistant')
+      const query = hasHistory ? '' : (messages.find((m) => m.role === 'user')?.content || '')
+      if (query.length > 30) {
+        const isComplex = !(await this.classifyQueryComplexity(query, model))
+        if (isComplex) {
+          const toolDesc = this.buildToolDescriptions()
+          const plan = await this.planWithOllama(query, model, toolDesc)
+          if (plan.length > 1) {
+            // Only plan-execute when > 1 step (single steps handled by agent loop)
+            log.agent(`Plan: ${plan.length} steps → ${plan.map(p => p.toolName).join(', ')}`)
+            yield { type: 'status', content: `Executing ${plan.length}-step plan...` }
+
+            for (let pi = 0; pi < plan.length; pi++) {
+              const step = plan[pi]
+              const toolRunId = crypto.randomUUID()
+              const tool = this.toolRegistry.get(step.toolName)
+              yield { type: 'status', content: `Step ${pi + 1}/${plan.length}: ${step.description}` }
+
+              if (tool) {
+                yield { type: 'tool_start', toolName: step.toolName, toolRunId, toolArgs: step.toolArgs }
+                try {
+                  const toolRes = await tool.execute(step.toolArgs as Record<string, any>)
+                  const resultText = typeof toolRes === 'string' ? toolRes : toolRes.result
+                  const widget = typeof toolRes === 'string' ? undefined : toolRes.widget
+                  yield { type: 'tool_end', toolName: step.toolName, toolRunId, toolResult: resultText, widget }
+                  apiMessages.push({ role: 'system', content: `[Step ${pi + 1}: ${step.description}]\n${resultText.slice(0, 1500)}` })
+                  if (sessionId && resultText.length < 2000) {
+                    try { const emb = await embed(resultText.slice(0, 1000)); storeMemory(this.db, sessionId, `[${step.toolName}] ${resultText.slice(0, 500)}`, emb) } catch { /* skip */ }
+                  }
+                  addToolCall(this.db, { sessionId: sessionId || null, toolName: step.toolName, toolArgs: JSON.stringify(step.toolArgs), toolResult: resultText, durationMs: 0 })
+                } catch (err: unknown) {
+                  const errm = err instanceof Error ? err.message : String(err)
+                  yield { type: 'tool_error', toolName: step.toolName, toolRunId, error: errm }
+                  apiMessages.push({ role: 'system', content: `[Step ${pi + 1} FAILED: ${step.toolName}] ${errm}` })
+                }
+              } else {
+                // Tool not registered — try OpenCode for this step
+                try {
+                  const ocResult = await this.askOpencode(step.description)
+                  if (ocResult) apiMessages.push({ role: 'system', content: `[Step ${pi + 1}: ${step.description} via OpenCode]\n${ocResult.slice(0, 1500)}` })
+                } catch { /* skip */ }
+              }
+            }
+            // Plan executed — agent loop will synthesize from apiMessages
+            log.agent(`Plan execution complete, entering agent loop for synthesis`)
+          }
         }
       }
     }
