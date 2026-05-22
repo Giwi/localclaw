@@ -91,6 +91,10 @@ export class ChatService {
     return this.http.get<Message[]>(`/api/sessions/${sessionId}/messages`)
   }
 
+  getProactiveSummary(sessionId: string) {
+    return this.http.get<{ role: string; content: string } | null>(`/api/sessions/${sessionId}/proactive`)
+  }
+
   deleteSession(id: string) {
     return this.http.delete(`/api/sessions/${id}`)
   }
@@ -113,6 +117,10 @@ export class ChatService {
 
   toggleBackgroundTask(id: string, enabled: boolean) {
     return this.http.patch(`/api/background-tasks/${id}`, { enabled })
+  }
+
+  runBackgroundTask(id: string) {
+    return this.http.post(`/api/background-tasks/${id}/run`, {})
   }
 
   uploadFile(sessionId: string, file: File): Observable<Message> {

@@ -92,6 +92,23 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
     res.json(messages)
   })
 
+  router.get('/sessions/:id/proactive', (req: Request, res: Response) => {
+    const tasks = listBackgroundTasks(db, req.params.id)
+    const enabledTasks = tasks.filter(t => t.enabled)
+    if (enabledTasks.length === 0) {
+      res.json(null)
+      return
+    }
+    const lines = enabledTasks.map(t => {
+      const next = t.nextRunAt ? new Date(t.nextRunAt).toLocaleString() : '—'
+      return `  • ${t.name} (${t.toolName}) · next: ${next}`
+    })
+    res.json({
+      role: 'assistant',
+      content: `👋 I have ${enabledTasks.length} scheduled task${enabledTasks.length > 1 ? 's' : ''} coming up:\n${lines.join('\n')}`,
+    })
+  })
+
   router.patch('/sessions/:id/messages/:msgId', (req: Request, res: Response) => {
     const { content } = req.body || {}
     if (!content || typeof content !== 'string') {

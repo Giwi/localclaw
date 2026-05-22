@@ -24,9 +24,13 @@
     ><i class="bi bi-chat-dots" style="margin-right:4px;"></i>Sessions</button>
     <button
       (click)="switchSidebarView.emit('tasks')"
-      style="flex:1;padding:8px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-sidebar-muted);border-bottom:2px solid transparent;transition:all var(--transition);"
+      style="flex:1;padding:8px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-sidebar-muted);border-bottom:2px solid transparent;transition:all var(--transition);position:relative;"
       [style]="sidebarView === 'tasks' ? 'color:var(--accent);border-bottom-color:var(--accent);' : ''"
-    ><i class="bi bi-clock" style="margin-right:4px;"></i>Tasks</button>
+    ><i class="bi bi-clock" style="margin-right:4px;"></i>Tasks
+      @if (backgroundTasks.length > 0 && sidebarView !== 'tasks') {
+        <span style="position:absolute;top:2px;right:4px;background:var(--accent);color:#fff;font-size:9px;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;padding:0 4px;">{{ backgroundTasks.length }}</span>
+      }
+    </button>
   </div>
 
   @if (sidebarView === 'sessions') {
@@ -118,11 +122,19 @@
               <div style="font-size:10px;color:var(--text-sidebar-muted);margin-top:2px;">
                 {{ task.toolName }} · {{ task.schedule }}
               </div>
+              <div style="font-size:10px;color:var(--text-sidebar-muted);margin-top:1px;">
+                next: {{ task.nextRunAt ? (task.nextRunAt | date:'short') : '—' }}
+              </div>
               @if (task.lastError) {
-                <div style="font-size:10px;color:var(--danger);margin-top:1px;">{{ task.lastError.slice(0, 60) }}</div>
+                <div style="font-size:10px;color:var(--danger);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ task.lastError.slice(0, 60) }}</div>
               }
             </div>
-            <div style="display:flex;gap:4px;flex-shrink:0;">
+            <div style="display:flex;gap:4px;flex-shrink:0;align-items:center;">
+              <button
+                (click)="runTask.emit(task.id)"
+                style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px;border-radius:4px;color:var(--text-sidebar-muted);"
+                title="Run now"
+              ><i class="bi bi-play-fill"></i></button>
               <button
                 (click)="toggleTask.emit(task)"
                 style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px;border-radius:4px;color:var(--success);"

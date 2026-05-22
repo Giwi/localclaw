@@ -1,10 +1,11 @@
 import { Component, Input, output, viewChild, ElementRef, type OnInit, type SimpleChanges, type OnChanges } from '@angular/core'
 import { FormsModule } from '@angular/forms'
+import { DatePipe } from '@angular/common'
 import { type Session, type BackgroundTask } from './chat.service'
 
 @Component({
   selector: 'app-sidebar',
-  imports: [FormsModule],
+  imports: [FormsModule, DatePipe],
   templateUrl: './sidebar.component.html',
 })
 export class SidebarComponent implements OnInit, OnChanges {
@@ -28,6 +29,7 @@ export class SidebarComponent implements OnInit, OnChanges {
   switchSidebarView = output<'sessions' | 'tasks'>()
   toggleTheme = output<void>()
   toggleTask = output<BackgroundTask>()
+  runTask = output<string>()
   deleteBgTask = output<{ event: Event; task: BackgroundTask }>()
   onSessionKeydown = output<KeyboardEvent>()
   renameInputChange = output<string>()

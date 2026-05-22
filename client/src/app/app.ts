@@ -131,6 +131,21 @@ export class App implements OnInit, OnDestroy {
       next: (msgs) => {
         this.messages.set(msgs)
         this.reconstructToolEvents(msgs)
+        if (msgs.filter(m => m.role === 'assistant').length === 0) {
+          this.api.getProactiveSummary(session.id).subscribe({
+            next: (proactive) => {
+              if (proactive?.content) {
+                this.messages.update((m) => [...m, {
+                  id: crypto.randomUUID(),
+                  sessionId: session.id,
+                  role: 'assistant',
+                  content: proactive.content,
+                  createdAt: new Date().toISOString(),
+                }])
+              }
+            },
+          })
+        }
       },
       error: () => this.showToast('Failed to load messages', 'error'),
     })
@@ -230,6 +245,16 @@ export class App implements OnInit, OnDestroy {
         this.showToast(`Task ${task.enabled ? 'paused' : 'resumed'}`, 'success')
       },
       error: () => this.showToast('Failed to toggle task', 'error'),
+    })
+  }
+
+  runTask(id: string) {
+    this.api.runBackgroundTask(id).subscribe({
+      next: () => {
+        this.showToast('Task triggered', 'success')
+        this.loadBackgroundTasks()
+      },
+      error: () => this.showToast('Failed to run task', 'error'),
     })
   }
 
