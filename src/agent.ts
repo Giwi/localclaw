@@ -424,10 +424,17 @@ export class Agent {
           log.agent(`Pre-planning for: "${query.slice(0, 80)}..."`)
           yield { type: 'status', content: 'Analyzing your request...' }
 
+          // Queries targeting a registered tool's domain skip pre-plan so
+          // the agent loop can use the tool directly instead of OpenCode.
+          const toolDomainPattern = /(weather|météo|temps|quel temps|forecast|prévisions? météo|news?|actualité|headlines|generate|draw|create an image|t.v.? guide|tv guide|programme t.v?|ce soir à la t.v?|search.*web|recherche)/i
+          // Also match registered tool names directly.
+          const allToolNames = this.toolRegistry.list().map((t) => t.name).join('|')
+          const toolNamePattern = new RegExp(`\\b(${allToolNames})\\b`, 'i')
+
           // Action requests skip pre-plan and go directly to the agent loop.
           const actionPattern = /(tous les jours|chaque (jour|semaine|mois)|schedule|remind|rappel|every (day|week|hour|\d+)|daily|weekly|send (to|me)|envoyer|recevoir|${TOOL_SEND_EMAIL}|${TOOL_SCHEDULE_TASK}|write (a|this|the) file|créer|sauvegarder)/i
-          if (actionPattern.test(query)) {
-            log.agent(`Pre-plan: action request detected, skipping to agent loop`)
+          if (actionPattern.test(query) || toolDomainPattern.test(query) || toolNamePattern.test(query)) {
+            log.agent(`Pre-plan: action or tool-domain request detected, skipping to agent loop`)
           } else {
             const prePlanResult = await this.solveWithOpencode(query)
 
