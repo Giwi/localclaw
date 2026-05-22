@@ -54,7 +54,7 @@ localclaw/
 │           └── markdown.pipe.ts        # Markdown → HTML rendering
 ├── searxng/
 │   └── settings.yml        # SearXNG config (JSON API + image proxy)
-├── plugins/                # Bundled plugin directory (see PLUGINS.md)
+├── plugins/                # Bundled plugin directory (see docs/plugins.md)
 ├── compose.yml             # Ollama + SearXNG + localclaw stack
 ├── Containerfile           # Production build
 ├── .env                    # Configuration (gitignored)
@@ -147,6 +147,8 @@ All settings via `.env`:
 
 ### Built-in Tools
 
+See [docs/tools.md](docs/tools.md) for the complete tool reference including parameter tables, return types, and the `ToolResult` widget pattern.
+
 - **web_fetch** — Search the web (SearXNG → DuckDuckGo) or fetch a specific URL. Supports `text`, `images`, and `download` modes. Validates domain existence before fetching.
 - **fetch_news** — Fetch the latest news articles on any topic. Uses SearXNG news search or RSS feeds (BBC, TechCrunch, Hacker News) as fallback.
 - **generate_image** — Generate images using Ollama image models (flux, sd, stable-diffusion). Saves to downloads directory.
@@ -159,7 +161,7 @@ All settings via `.env`:
 - **weather** — Get current weather and 3-day forecast for any location. Uses Open-Meteo (free, no API key). Forecast labels use weekday names (Friday, Saturday…) — no "Today"/"Tomorrow". Widget renders as an assistant-style bubble with Bootstrap icons.
 - **search_knowledge** — Search the local RAG knowledge base (uploaded documents + past tool results). Supports keyword and semantic search modes.
 - **schedule_task** — Schedule, unschedule, and list background tasks. Supports `every Xm`, `every Xh`, `daily at HH:MM`, `daily`, `weekly` schedules.
-- **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash. Execution respects sandbox mode. Domain-specific tools (TV guide, stock tickers, etc.) are created on the fly at the LLM's request rather than shipped as builtins — see PLUGINS.md for the plugin system.
+- **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash. Execution respects sandbox mode. Domain-specific tools (TV guide, stock tickers, etc.) are created on the fly at the LLM's request rather than shipped as builtins — see [docs/plugins.md](docs/plugins.md) for the plugin system.
 
 ### Tool Widgets
 
@@ -177,7 +179,7 @@ Tool results are automatically embedded (via Ollama embeddings API) and stored i
 
 ### Plugins
 
-External tools can be loaded as plugins from `plugins/` or `~/.localclaw/plugins/`. A plugin is a `.js`/`.mjs` file exporting a `ToolModule` with `definition` and `execute`. See [PLUGINS.md](PLUGINS.md) for the full plugin format, dual-response `ToolResult` pattern, and NPM package support.
+External tools can be loaded as plugins from `plugins/` or `~/.localclaw/plugins/`. A plugin is a `.js`/`.mjs` file exporting a `ToolModule` with `definition` and `execute`. See [docs/plugins.md](docs/plugins.md) for the full plugin format, dual-response `ToolResult` pattern, and NPM package support.
 
 ### Security
 
