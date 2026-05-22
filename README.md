@@ -145,18 +145,7 @@ All settings via `.env`:
 | `LOCALCLAW_HTTPS_KEY` | — | Path to TLS private key for HTTPS (optional) |
 | `LOCALCLAW_HTTPS_CERT` | — | Path to TLS certificate for HTTPS (optional) |
 
-## How It Works
-
-See [docs/architecture.md](docs/architecture.md) for the full agent loop flow, pre-planning pipeline, failure handling, fallback chain, and database schema.
-
-1. User sends a message via the Angular UI or REST API
-2. The agent loop sends the conversation + available tools to Ollama
-3. Ollama responds with either text or tool calls
-4. Tool calls are executed (web search, file ops, bash, etc.)
-5. Results are fed back to Ollama for the next reasoning step
-6. The loop continues until the agent produces a final answer (up to 15 iterations)
-
-### Built-in Tools
+## Built-in Tools
 
 See [docs/tools.md](docs/tools.md) for the complete tool reference including parameter tables, return types, and the `ToolResult` widget pattern.
 
@@ -174,7 +163,7 @@ See [docs/tools.md](docs/tools.md) for the complete tool reference including par
 - **schedule_task** — Schedule, unschedule, and list background tasks. Supports `every Xm`, `every Xh`, `daily at HH:MM`, `daily`, `weekly` schedules.
 - **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash. Execution respects sandbox mode. Domain-specific tools (TV guide, stock tickers, etc.) are created on the fly at the LLM's request rather than shipped as builtins — see [docs/plugins.md](docs/plugins.md) for the plugin system.
 
-### Tool Widgets
+## Tool Widgets
 
 Tools can return a `ToolResult` with a structured `widget` payload alongside the text result:
 
@@ -184,15 +173,15 @@ Tools can return a `ToolResult` with a structured `widget` payload alongside the
 
 The `result` feeds the LLM as usual. The optional `widget` carries typed data that the frontend renders directly as a native component — no fragile string parsing needed. See `components/weather-widget/` for the reference implementation. Any tool can adopt this pattern by returning a widget and adding a matching frontend component.
 
-### RAG Memory
+## RAG Memory
 
 Tool results are automatically embedded and stored for retrieval. See [docs/architecture.md](docs/architecture.md) for the embedding pipeline, chunking strategy, and search modes.
 
-### Plugins
+## Plugins
 
 External tools can be loaded as plugins from `plugins/` or `~/.localclaw/plugins/`. A plugin is a `.js`/`.mjs` file exporting a `ToolModule` with `definition` and `execute`. See [docs/plugins.md](docs/plugins.md) for the full plugin format, dual-response `ToolResult` pattern, and NPM package support.
 
-### Security
+## Security
 
 **API authentication** — When `LOCALCLAW_API_KEY` is set, all REST endpoints (except `/api/health`) require a `Bearer <token>` header. Protects the agent from unauthorized access in exposed deployments.
 
@@ -204,15 +193,15 @@ External tools can be loaded as plugins from `plugins/` or `~/.localclaw/plugins
 
 **Path traversal protection** — `read_file` / `write_file` tools validate paths against the data directory to prevent directory traversal.
 
-### Code Execution Sandbox
+## Code Execution Sandbox
 
 When `LOCALCLAW_SANDBOX_ENABLED=true`, `run_bash` and dynamic tool executions are isolated in Docker containers. See [docs/sandbox.md](docs/sandbox.md) for security options, configuration, and prerequisites.
 
-### Image Generation
+## Image Generation
 
 The `generate_image` tool calls Ollama's `/api/generate` with image models (flux, sd, etc.). Generated images are saved to the downloads directory and returned as URLs.
 
-### Persistence & Resilience
+## Persistence & Resilience
 
 **Tool result persistence** — `tool_end` events are stored as JSON in the `tool_results` column of the `messages` table. On page reload, the client reconstructs `ToolEvent[]` from persisted data so rendered widgets (weather, etc.) survive refresh without losing context.
 
@@ -221,7 +210,7 @@ The agent re-prompts itself when:
 - The model gives up with phrases like `cannot find`, `does not contain`, `pas directement`
 - The model responds with advisory text instead of using tools
 
-### Background Tasks
+## Background Tasks
 
 Long-running and recurring tasks are handled by `BackgroundScheduler` (`src/scheduler.ts`), which polls the database every 30 seconds for due tasks. The agent can schedule tasks using the `schedule_task` tool:
 
@@ -234,7 +223,7 @@ schedule_task({ action: "unschedule", task_id: "..." })
 
 When a background task completes, the result is stored in the database and injected as a system message into the session — the agent sees it on the next conversation turn.
 
-### Email Delivery
+## Email Delivery
 
 The `send_email` tool uses the [Mailgun API](https://documentation.mailgun.com/) to send emails. Configure in `.env`:
 
@@ -246,7 +235,7 @@ LOCALCLAW_MAILGUN_FROM=localclaw <mailgun@your-domain.mailgun.org>
 
 **Sandbox domains** require authorized recipients — add the target email in Mailgun Dashboard → Sending → Authorized Recipients.
 
-### Telegram Bot
+## Telegram Bot
 
 The `send_telegram` tool sends messages via a Telegram bot. Configure in `.env`:
 
@@ -262,7 +251,7 @@ Usage:
 
 If `LOCALCLAW_TELEGRAM_CHAT_ID` is set in `.env`, the `chat_id` argument can be omitted — the tool falls back to the env var automatically.
 
-### OpenCode
+## OpenCode
 
 [OpenCode](https://opencode.ai) is a CLI coding agent that localclaw delegates complex multi-file coding tasks to. Configure the binary path and API key in `.env`:
 
@@ -275,7 +264,7 @@ When `LOCALCLAW_OPENCODE_API_KEY` is set, it is forwarded to OpenCode as `ANTHRO
 
 Run `npm run setup:opencode` to initialise the OpenCode config file at `~/.config/opencode/opencode.json`.
 
-### Web Search
+## Web Search
 
 Primary backend is SearXNG (Docker container on port 8888) with custom `settings.yml` that enables JSON API and image-focused engines (Pixabay, Flickr, DeviantArt, Getty, Openverse). Falls back to DuckDuckGo HTML search if SearXNG is not configured.
 
