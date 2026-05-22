@@ -630,8 +630,14 @@ Query: "${query.slice(0, 200)}"`,
       if (!toolCalls || toolCalls.length === 0) {
 
         // Detect "advisory" text where the model avoids action.
-        // Skip classification for clear success confirmations (fast path).
+        // Skip classification for clear success confirmations and greetings.
         const isSuccess = /(successfully scheduled|successfully created|task has been|background task|cron task|scheduled task|tâche a été|planifiée avec succès|programmée pour)/i.test(content)
+        const isGreeting = content.trim().length < 120 && /^(hello|hi\b|hey|salut|bonjour|coucou|hola|yo\b|good (morning|afternoon|evening)|welcome|how (can|may) i (assist|help)|how can i (assist|help)|comment (puis-je|je peux) (vous|t['\u2019])aider|que puis-je faire|what can i (do|help))/i.test(content.trim())
+        if (isGreeting) {
+          log.agent('Greeting/small-talk detected, yielding text')
+          yield { type: 'text', content }
+          return
+        }
         const isAdvisory = isSuccess ? false : await this.classifyAdvisory(content, model)
 
         // ---- Forced-tool mode: model was told to call a tool but didn't ----
