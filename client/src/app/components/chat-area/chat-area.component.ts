@@ -1,31 +1,13 @@
 import { Component, Input, output, viewChild, ElementRef, type SimpleChanges, type OnChanges } from '@angular/core'
 import { FormsModule } from '@angular/forms'
 import { JsonPipe, AsyncPipe } from '@angular/common'
-import { MarkdownPipe } from './markdown.pipe'
-import { type Session, type Message, type ToolEvent } from './chat.service'
-
-interface WeatherForecast {
-  day: string
-  min: string
-  max: string
-  condition: string
-}
-
-interface WeatherData {
-  city: string
-  currentTemp: string
-  feelsLike: string
-  condition: string
-  humidity: string
-  wind: string
-  pressure: string
-  uv: string
-  forecast: WeatherForecast[]
-}
+import { MarkdownPipe } from '../../pipes/markdown.pipe'
+import { type Session, type Message, type ToolEvent } from '../../services/chat.service'
+import { WeatherWidgetComponent, type WeatherData } from '../weather-widget/weather-widget.component'
 
 @Component({
   selector: 'app-chat-area',
-  imports: [FormsModule, JsonPipe, AsyncPipe, MarkdownPipe],
+  imports: [FormsModule, JsonPipe, AsyncPipe, MarkdownPipe, WeatherWidgetComponent],
   templateUrl: './chat-area.component.html',
 })
 export class ChatAreaComponent implements OnChanges {
@@ -106,22 +88,6 @@ export class ChatAreaComponent implements OnChanges {
   }
 
   // ── Weather widget ──
-
-  weatherEmoji(condition: string): string {
-    const c = condition.toLowerCase()
-    if (c.includes('clear') || c.includes('sunny')) return '\u2600\uFE0F'
-    if (c.includes('mainly clear')) return '\uD83C\uDF24\uFE0F'
-    if (c.includes('partly cloudy')) return '\u26C5'
-    if (c.includes('overcast')) return '\u2601\uFE0F'
-    if (c.includes('fog')) return '\uD83C\uDF2B\uFE0F'
-    if (c.includes('drizzle')) return '\uD83C\uDF26\uFE0F'
-    if (c.includes('rain shower')) return '\uD83C\uDF27\uFE0F'
-    if (c.includes('rain') || c.includes('rain,')) return '\uD83C\uDF27\uFE0F'
-    if (c.includes('freezing')) return '\uD83C\uDF27\uFE0F'
-    if (c.includes('snow')) return '\u2744\uFE0F'
-    if (c.includes('thunderstorm') || c.includes('hail')) return '\u26C8\uFE0F'
-    return '\uD83C\uDF21\uFE0F'
-  }
 
   getMessageWeather(msg: Message): WeatherData | null {
     if (!msg.toolResults) return null

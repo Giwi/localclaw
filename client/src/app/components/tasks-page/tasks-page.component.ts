@@ -1,6 +1,6 @@
 import { Component, inject, output, signal, input, type OnInit, type OnChanges, type SimpleChanges } from '@angular/core'
 import { DatePipe } from '@angular/common'
-import { ChatService, type BackgroundTask, type TaskExecution } from './chat.service'
+import { ChatService, type BackgroundTask, type TaskExecution } from '../../services/chat.service'
 
 @Component({
   selector: 'app-tasks-page',

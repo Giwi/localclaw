@@ -1,9 +1,9 @@
 import { Component, OnInit, inject, signal, OnDestroy } from '@angular/core'
 import { Subscription } from 'rxjs'
-import { ChatService, type Session, type Message, type BackgroundTask, type ToolEvent } from './chat.service'
-import { SidebarComponent } from './sidebar.component'
-import { ChatAreaComponent } from './chat-area.component'
-import { TasksPageComponent } from './tasks-page.component'
+import { ChatService, type Session, type Message, type BackgroundTask, type ToolEvent } from './services/chat.service'
+import { SidebarComponent } from './components/sidebar/sidebar.component'
+import { ChatAreaComponent } from './components/chat-area/chat-area.component'
+import { TasksPageComponent } from './components/tasks-page/tasks-page.component'
 
 export interface Toast {
   id: string

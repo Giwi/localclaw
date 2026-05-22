@@ -1,7 +1,7 @@
 import { Component, Input, output, viewChild, ElementRef, type OnInit, type SimpleChanges, type OnChanges } from '@angular/core'
 import { FormsModule } from '@angular/forms'
 import { DatePipe } from '@angular/common'
-import { type Session, type BackgroundTask } from './chat.service'
+import { type Session, type BackgroundTask } from '../../services/chat.service'
 
 @Component({
   selector: 'app-sidebar',
