@@ -409,26 +409,22 @@ export class Agent {
     let dynamicToolAttempts = 0    // How many times OpenCode was called to create dynamic tools (max 3).
     let emptyCount = 0             // How many consecutive empty responses we've seen from Ollama.
 
-    // ---- Pre-planning: OpenCode solves the query directly ----
+    // ---- Pre-planning: OpenCode solves first-query directly ----
     //
-    // Before the Ollama model even starts, OpenCode analyses the user's query
-    // and, if appropriate, generates AND runs a bash command.  The result is
-    // injected as context so Ollama only needs to format it — no tool
-    // registration or multi-turn loop needed.
-    //
-    // If OpenCode returns "none" or the command fails, we fall through to the
-    // normal agent loop.  If it succeeds (>50 chars of output), we do a
-    // single Ollama call to present the answer and return immediately.
+    // For the very first user message in a conversation, OpenCode answers
+    // directly — this saves time on simple queries.  Once the conversation
+    // has history (assistant messages exist), we skip pre-plan so follow-up
+    // questions are handled by the agent loop which has full context.
     {
-      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+      const hasHistory = messages.some((m) => m.role === 'assistant')
+      const lastUserMsg = !hasHistory ? [...messages].reverse().find((m) => m.role === 'user') : null
       if (lastUserMsg) {
         try {
           const query = lastUserMsg.content
           log.agent(`Pre-planning for: "${query.slice(0, 80)}..."`)
           yield { type: 'status', content: 'Analyzing your request...' }
 
-          // If the user wants an action performed (schedule, send, create),
-          // skip the pre-plan and let the agent loop use the registered tools.
+          // Action requests skip pre-plan and go directly to the agent loop.
           const actionPattern = /(tous les jours|chaque (jour|semaine|mois)|schedule|remind|rappel|every (day|week|hour|\d+)|daily|weekly|send (to|me)|envoyer|recevoir|${TOOL_SEND_EMAIL}|${TOOL_SCHEDULE_TASK}|write (a|this|the) file|créer|sauvegarder)/i
           if (actionPattern.test(query)) {
             log.agent(`Pre-plan: action request detected, skipping to agent loop`)
@@ -436,14 +432,16 @@ export class Agent {
             const prePlanResult = await this.solveWithOpencode(query)
 
             if (prePlanResult) {
-              // OpenCode answered directly — present it.
               log.agent(`Pre-plan succeeded (${prePlanResult.length}ch)`)
 
-              // Ask Ollama to present the answer in the user's language.
+              // Ask Ollama to present the answer in the user's language using
+              // a clean formatting prompt (no agent system prompt that could
+              // confuse the model into trying to call tools).
               yield { type: 'status', content: 'Formatting response...' }
               const formatMessages: ChatMessage[] = [
-                ...apiMessages,
-                { role: 'assistant', content: `Answer the user's question in their language based on this data. Be concise:\n\n${prePlanResult.slice(0, 4000)}` },
+                { role: 'system', content: 'You are a helpful assistant. Format the following data as a clear answer to the user\'s question. Be concise and natural.' },
+                { role: 'user', content: query },
+                { role: 'assistant', content: prePlanResult.slice(0, 4000) },
               ]
 
               const formatRes = await fetch(`${OLLAMA_BASE}/api/chat`, {
@@ -511,7 +509,6 @@ export class Agent {
               return
             }
 
-            // OpenCode returned nothing useful — fall through to agent loop.
             log.agent(`Pre-plan: no direct solution, entering agent loop`)
           }
 
