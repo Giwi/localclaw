@@ -55,6 +55,15 @@ localclaw/
 ├── searxng/
 │   └── settings.yml        # SearXNG config (JSON API + image proxy)
 ├── plugins/                # Bundled plugin directory (see docs/plugins.md)
+├── docs/                    # Documentation
+│   ├── architecture.md       # Agent loop, pre-planning, fallback chain
+│   ├── api.md                # REST endpoints + WebSocket protocol
+│   ├── database.md           # Schema, tables, embedding cache
+│   ├── tools.md              # Tool writing guide + built-in reference
+│   ├── plugins.md            # Plugin system: format, lifecycle, examples
+│   ├── testing.md            # Test suite conventions
+│   ├── sandbox.md            # Docker sandbox configuration
+│   └── system-prompt.md      # Agent personality and behavioral rules
 ├── compose.yml             # Ollama + SearXNG + localclaw stack
 ├── Containerfile           # Production build
 ├── .env                    # Configuration (gitignored)
@@ -177,7 +186,7 @@ The `result` feeds the LLM as usual. The optional `widget` carries typed data th
 
 ### RAG Memory
 
-Tool results are automatically embedded (via Ollama embeddings API) and stored in SQLite. At the start of each conversation turn, the agent retrieves semantically relevant past tool results and injects them into the system prompt — enabling cross-session memory without filling the context window.
+Tool results are automatically embedded and stored for retrieval. See [docs/architecture.md](docs/architecture.md) for the embedding pipeline, chunking strategy, and search modes.
 
 ### Plugins
 
@@ -197,7 +206,7 @@ External tools can be loaded as plugins from `plugins/` or `~/.localclaw/plugins
 
 ### Code Execution Sandbox
 
-When `LOCALCLAW_SANDBOX_ENABLED=true`, `run_bash` and `create_tool` executions are wrapped in Docker containers with `--network none`, `--security-opt no-new-privileges`, and `--cap-drop ALL` for safe code execution.
+When `LOCALCLAW_SANDBOX_ENABLED=true`, `run_bash` and dynamic tool executions are isolated in Docker containers. See [docs/sandbox.md](docs/sandbox.md) for security options, configuration, and prerequisites.
 
 ### Image Generation
 
@@ -272,60 +281,7 @@ Primary backend is SearXNG (Docker container on port 8888) with custom `settings
 
 ## API
 
-All API routes (except `/api/health`) require authentication when `LOCALCLAW_API_KEY` is set. Pass the key as a Bearer token:
-
-```
-Authorization: Bearer <your-api-key>
-```
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/health` | Health check |
-| `GET` | `/api/tools` | List registered tools |
-| `GET` | `/api/sessions` | List sessions |
-| `POST` | `/api/sessions` | Create session |
-| `GET` | `/api/sessions/:id` | Get session |
-| `DELETE` | `/api/sessions/:id` | Delete session |
-| `PATCH` | `/api/sessions/:id` | Rename session |
-| `GET` | `/api/sessions/:id/messages` | Get messages |
-| `PATCH` | `/api/sessions/:id/messages/:msgId` | Edit message (truncates conversation after it) |
-| `POST` | `/api/sessions/:id/upload` | Upload file (txt/pdf/docx) for chat context |
-| `GET` | `/api/background-tasks` | List background tasks (used by the UI Tasks tab) |
-| `GET` | `/api/background-tasks/:id` | Get a background task |
-| `GET` | `/api/background-tasks/:id/logs` | Get a task's execution history |
-| `POST` | `/api/background-tasks/:id/run` | Manually trigger a task run |
-| `DELETE` | `/api/background-tasks/:id` | Delete a background task |
-| `PATCH` | `/api/background-tasks/:id` | Enable/disable (pause/resume) a background task |
-| `GET` | `/api/sessions/:id/proactive` | Get proactive summary (upcoming tasks for a session) |
-| `GET` | `/api/knowledge` | List uploaded knowledge documents |
-| `POST` | `/api/knowledge/upload` | Upload file to knowledge base |
-| `DELETE` | `/api/knowledge/:id` | Delete a knowledge document |
-
-### Chat Streaming (WebSocket)
-
-Connect to `ws://host/ws` and send a JSON message:
-
-```json
-{"type":"chat","sessionId":"<uuid>","message":"Hello!"}
-```
-
-The server streams events back as JSON messages:
-
-```
-{"type":"text","content":"thinking..."}
-{"type":"tool_start","toolName":"web_fetch","toolRunId":"<uuid>","toolArgs":{...}}
-{"type":"tool_chunk","toolName":"web_fetch","toolRunId":"<uuid>","content":"stdout line 1..."}
-{"type":"tool_end","toolName":"web_fetch","toolRunId":"<uuid>","toolResult":"..."}
-{"type":"tool_error","toolName":"web_fetch","toolRunId":"<uuid>","error":"..."}
-{"type":"text","content":"final answer"}
-{"type":"done"}
-```
-
-Each tool invocation gets a unique `toolRunId` so concurrent or repeated tool calls are matched correctly in the UI. Tool execution output is streamed in real-time via `tool_chunk` events.
-
-**Development proxy:** When using `ng serve`, the Angular dev server proxies `/ws` to the backend. Configured in `client/proxy.conf.js`.
-
-**Stop generation:** Close the WebSocket from the client side — the backend detects `req.on('close')` and aborts the agent loop.
+See [docs/api.md](docs/api.md) for the full REST endpoint table and WebSocket streaming protocol.
 
 ## Production Build
 
