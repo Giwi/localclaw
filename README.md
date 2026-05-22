@@ -145,7 +145,7 @@ All settings via `.env`:
 - **send_email** — Send email via Mailgun API. Supports plain text and HTML. Combine with background tasks for recurring delivery.
 - **send_telegram** — Send Telegram messages via bot. Includes a `get_chat_id` helper to discover chat IDs. Combine with background tasks for recurring notifications.
 - **browser_automation** — Control a headless Chromium browser (via Puppeteer). Navigate URLs, click elements, extract page content, take screenshots, and fill forms.
-- **weather** — Get current weather and forecasts for any location. Uses wttr.in with Open-Meteo fallback.
+- **weather** — Get current weather and 3-day forecast for any location. Uses Open-Meteo (free, no API key). Forecast labels use weekday names (Friday, Saturday…) — no "Today"/"Tomorrow". Widget renders as an assistant-style bubble with Bootstrap icons.
 - **search_knowledge** — Search the local RAG knowledge base (uploaded documents + past tool results). Supports keyword and semantic search modes.
 - **schedule_task** — Schedule, unschedule, and list background tasks. Supports `every Xm`, `every Xh`, `daily at HH:MM`, `daily`, `weekly` schedules.
 - **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash. Execution respects sandbox mode.
@@ -175,6 +175,8 @@ When `LOCALCLAW_SANDBOX_ENABLED=true`, `run_bash` and `create_tool` executions a
 The `generate_image` tool calls Ollama's `/api/generate` with image models (flux, sd, etc.). Generated images are saved to the downloads directory and returned as URLs.
 
 ### Persistence & Resilience
+
+**Tool result persistence** — `tool_end` events are stored as JSON in the `tool_results` column of the `messages` table. On page reload, the client reconstructs `ToolEvent[]` from persisted data so rendered widgets (weather, etc.) survive refresh without losing context.
 
 The agent re-prompts itself when:
 - A tool returns weak results (`No results`, `not found`, `Error:`, `< 30 chars`)
@@ -353,6 +355,7 @@ Angular 20 single-page application (signals-based) with:
 - Background task management — list, pause/resume, and delete scheduled tasks in a dedicated Tasks tab
 - Toast notifications for errors and confirmations
 - Copy button on code blocks and tool results
+- Weather widget rendered as an assistant-style message bubble (same width, border, shadow) with Bootstrap icons for humidity/wind/pressure/UV metrics
 - Inline session rename (double-click or pencil icon)
 - Keyboard navigation in sidebar sessions (arrow keys, Enter, Delete)
 - Mobile responsive layout
