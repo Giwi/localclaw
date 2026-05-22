@@ -44,6 +44,7 @@ export interface StreamChunk {
   toolRunId?: string
   toolArgs?: Record<string, any>
   toolResult?: string
+  widget?: { type: string; data: Record<string, unknown> }
   error?: string
 }
 
@@ -55,6 +56,7 @@ export function agentEventToChunk(event: AgentEvent): StreamChunk {
     toolRunId: event.toolRunId,
     toolArgs: event.toolArgs,
     toolResult: event.toolResult,
+    widget: event.widget,
     error: event.error,
   }
 }

@@ -51,8 +51,14 @@ export interface ToolEvent {
   expandedMore?: boolean
   toolArgs?: Record<string, any>
   toolResult?: string
+  widget?: ToolWidget
   content?: string
   error?: string
+}
+
+export interface ToolWidget {
+  type: string
+  data: Record<string, unknown>
 }
 
 export interface StreamChunk {
@@ -62,6 +68,7 @@ export interface StreamChunk {
   toolRunId?: string
   toolArgs?: Record<string, any>
   toolResult?: string
+  widget?: ToolWidget
   error?: string
 }
 

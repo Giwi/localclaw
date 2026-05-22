@@ -30,6 +30,10 @@ function mockFetchCurrentWeather() {
 }
 
 describe('weatherTool', () => {
+  function textResult(r: unknown): string {
+    return typeof r === 'string' ? r : (r as any).result
+  }
+
   beforeEach(() => {
     vi.resetModules()
     mockFetch.mockReset()
@@ -46,9 +50,9 @@ describe('weatherTool', () => {
     mockFetchCurrentWeather()
     const { weatherTool } = await import('../src/tools/builtin/weather.js')
     const result = await weatherTool.execute({ location: '48.8566, 2.3522' })
-    expect(result).toContain('Weather for 48.8566, 2.3522')
-    expect(result).toContain('22°C')
-    expect(result).toContain('Clear sky')
+    expect(textResult(result)).toContain('Weather for 48.8566, 2.3522')
+    expect(textResult(result)).toContain('22°C')
+    expect(textResult(result)).toContain('Clear sky')
     expect(mockFetch).toHaveBeenCalledTimes(1) // no geocode call
   })
 
@@ -56,21 +60,21 @@ describe('weatherTool', () => {
     mockFetchCurrentWeather()
     const { weatherTool } = await import('../src/tools/builtin/weather.js')
     const result = await weatherTool.execute({ location: '48.8566;2.3522' })
-    expect(result).toContain('48.8566, 2.3522')
+    expect(textResult(result)).toContain('48.8566, 2.3522')
   })
 
   it('parses space-separated coordinates', async () => {
     mockFetchCurrentWeather()
     const { weatherTool } = await import('../src/tools/builtin/weather.js')
     const result = await weatherTool.execute({ location: '48.8566 2.3522' })
-    expect(result).toContain('48.8566, 2.3522')
+    expect(textResult(result)).toContain('48.8566, 2.3522')
   })
 
   it('parses negative latitude', async () => {
     mockFetchCurrentWeather()
     const { weatherTool } = await import('../src/tools/builtin/weather.js')
     const result = await weatherTool.execute({ location: '-33.8688, 151.2093' })
-    expect(result).toContain('-33.8688, 151.2093')
+    expect(textResult(result)).toContain('-33.8688, 151.2093')
   })
 
   it('uses geocoding when location is a city name', async () => {
@@ -78,7 +82,7 @@ describe('weatherTool', () => {
     mockFetchCurrentWeather()
     const { weatherTool } = await import('../src/tools/builtin/weather.js')
     const result = await weatherTool.execute({ location: 'Paris' })
-    expect(result).toContain('Weather for')
+    expect(textResult(result)).toContain('Weather for')
     expect(mockFetch).toHaveBeenCalledTimes(2) // geocode + weather
   })
 
@@ -100,13 +104,13 @@ describe('weatherTool', () => {
     mockFetchCurrentWeather()
     const { weatherTool } = await import('../src/tools/builtin/weather.js')
     const result = await weatherTool.execute({ location: '48.8566, 2.3522' })
-    expect(result).toContain('22°C')
-    expect(result).toContain('feels like 20°C')
-    expect(result).toContain('Clear sky')
-    expect(result).toContain('Humidity: 55%')
-    expect(result).toContain('Wind: 12 km/h')
-    expect(result).toContain('Pressure: 1013 hPa')
-    expect(result).toContain('UV: 5')
+    expect(textResult(result)).toContain('22°C')
+    expect(textResult(result)).toContain('feels like 20°C')
+    expect(textResult(result)).toContain('Clear sky')
+    expect(textResult(result)).toContain('Humidity: 55%')
+    expect(textResult(result)).toContain('Wind: 12 km/h')
+    expect(textResult(result)).toContain('Pressure: 1013 hPa')
+    expect(textResult(result)).toContain('UV: 5')
   })
 
   it('includes daily forecast when days > 1', async () => {
@@ -121,8 +125,8 @@ describe('weatherTool', () => {
     })
     const { weatherTool } = await import('../src/tools/builtin/weather.js')
     const result = await weatherTool.execute({ location: '48.8566, 2.3522', days: '3' })
-    expect(result).toContain('Mainly clear')
-    expect(result).toContain('Fog')
+    expect(textResult(result)).toContain('Mainly clear')
+    expect(textResult(result)).toContain('Fog')
   })
 
   it('handles unknown weather codes', async () => {
@@ -132,7 +136,7 @@ describe('weatherTool', () => {
     })
     const { weatherTool } = await import('../src/tools/builtin/weather.js')
     const result = await weatherTool.execute({ location: '48.8566, 2.3522' })
-    expect(result).toContain('Code 999')
+    expect(textResult(result)).toContain('Code 999')
   })
 
   it('returns error on weather API failure', async () => {
@@ -165,7 +169,7 @@ describe('weatherTool', () => {
     const { weatherTool } = await import('../src/tools/builtin/weather.js')
     const result = await weatherTool.execute({ location: '48.8566, 2.3522', days: '99' })
     // 7 daily forecast lines (Today/Tomorrow/weekday lines)
-    const forecastLines = result.split('\n').filter(l => /^\w+: \d/.test(l) && !l.startsWith('Now:') && !l.startsWith('Humidity:'))
+    const forecastLines = textResult(result).split('\n').filter(l => /^\w+: \d/.test(l) && !l.startsWith('Now:') && !l.startsWith('Humidity:'))
     expect(forecastLines.length).toBe(7)
   })
 })

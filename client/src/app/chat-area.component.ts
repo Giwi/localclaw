@@ -126,40 +126,33 @@ export class ChatAreaComponent implements OnChanges {
   getMessageWeather(msg: Message): WeatherData | null {
     if (!msg.toolResults) return null
     try {
-      const results = JSON.parse(msg.toolResults) as { toolName: string; toolResult: string }[]
-      const weatherResult = results.find(r => r.toolName === 'weather')?.toolResult
-      if (!weatherResult) return null
-      return this.parseWeatherResult(weatherResult)
+      const results = JSON.parse(msg.toolResults) as { toolName: string; toolResult: string; widget?: { type: string; data: Record<string, unknown> } }[]
+      const entry = results.find(r => r.toolName === 'weather' && r.widget?.type === 'weather')
+      if (!entry?.widget) return null
+      return this.widgetToWeatherData(entry.widget.data)
     } catch {
       return null
     }
   }
 
-  parseWeatherResult(result: string): WeatherData | null {
-    if (!result) return null
-    const lines = result.split('\n').filter(l => l.trim())
-    const locationMatch = lines[0]?.match(/^Weather for (.+)/)
-    if (!locationMatch) return null
-
-    const nowLine = lines.find(l => l.startsWith('Now:'))
-    const currentTemp = nowLine?.match(/Now:\s*([\d.-]+)°C/)?.at(1) || ''
-    const feelsLike = nowLine?.match(/feels like ([\d.-]+)°C/)?.at(1) || ''
-    const condition = nowLine?.match(/°C[,\s]+\s*(?:\([^)]*\)[,\s]*)?(.+)$/)?.at(1)?.trim() || ''
-
-    const detailLine = lines.find(l => l.startsWith('Humidity:'))
-    const humidity = detailLine?.match(/Humidity:\s*([\d.]+%)/)?.at(1) || ''
-    const wind = detailLine?.match(/Wind:\s*([\d.]+ km\/h)/)?.at(1) || ''
-    const pressure = detailLine?.match(/Pressure:\s*([\d.]+ hPa)/)?.at(1) || ''
-    const uv = detailLine?.match(/UV:\s*([\d.]+)/)?.at(1) || ''
-
-    const forecast: WeatherForecast[] = []
-    for (const line of lines) {
-      const fMatch = line.match(/^(\w[\w\s]*?):\s*([\d.-]+)\u2013([\d.-]+)°C,\s*(.+)$/)
-      if (fMatch && !line.startsWith('Now:')) {
-        forecast.push({ day: fMatch[1].trim(), min: fMatch[2], max: fMatch[3], condition: fMatch[4].trim() })
-      }
+  private widgetToWeatherData(data: Record<string, unknown>): WeatherData | null {
+    const forecast = (data['forecast'] as any[] || []).map((f: any) => ({
+      day: String(f.day ?? ''),
+      min: String(f.min ?? ''),
+      max: String(f.max ?? ''),
+      condition: String(f.condition ?? ''),
+    }))
+    return {
+      city: String(data['city'] ?? ''),
+      currentTemp: String(data['currentTemp'] ?? ''),
+      feelsLike: String(data['feelsLike'] ?? ''),
+      condition: String(data['condition'] ?? ''),
+      humidity: String(data['humidity'] ?? ''),
+      wind: String(data['wind'] ?? ''),
+      pressure: String(data['pressure'] ?? ''),
+      uv: String(data['uv'] ?? ''),
+      forecast,
     }
-
-    return { city: locationMatch[1].trim(), currentTemp, feelsLike, condition, humidity, wind, pressure, uv, forecast }
   }
+
 }

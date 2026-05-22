@@ -1,4 +1,4 @@
-import type { ToolModule } from '../types.js'
+import type { ToolModule, ToolResult } from '../types.js'
 
 const UA = 'localclaw/0.1 (weather-tool)'
 const WEATHER_CODES: Record<number, string> = {
@@ -101,6 +101,7 @@ export const weatherTool: ToolModule = {
         if (c.uv_index !== undefined && c.uv_index !== null) result += ` | UV: ${c.uv_index}`
       }
 
+      const forecast: { day: string; min: number; max: number; condition: string }[] = []
       if (data.daily) {
         const d = data.daily
         result += `\n`
@@ -110,10 +111,22 @@ export const weatherTool: ToolModule = {
           const day = dayNames[dt.getUTCDay()] || d.time[i]
           const wc = WEATHER_CODES[d.weather_code[i]] || `Code ${d.weather_code[i]}`
           result += `\n${day}: ${d.temperature_2m_min[i]}–${d.temperature_2m_max[i]}°C, ${wc}`
+          forecast.push({ day, min: d.temperature_2m_min[i], max: d.temperature_2m_max[i], condition: wc })
         }
       }
 
-      return result
+      const widgetData: Record<string, unknown> = { city: displayName, forecast }
+      if (data.current) {
+        widgetData['currentTemp'] = data.current.temperature_2m
+        widgetData['feelsLike'] = data.current.apparent_temperature
+        widgetData['condition'] = WEATHER_CODES[data.current.weather_code] || `Code ${data.current.weather_code}`
+        if (data.current.relative_humidity_2m != null) widgetData['humidity'] = `${data.current.relative_humidity_2m}%`
+        if (data.current.wind_speed_10m != null) widgetData['wind'] = `${data.current.wind_speed_10m} km/h`
+        if (data.current.pressure_msl != null) widgetData['pressure'] = `${data.current.pressure_msl} hPa`
+        if (data.current.uv_index != null) widgetData['uv'] = `${data.current.uv_index}`
+      }
+
+      return { result, widget: { type: 'weather', data: widgetData } } satisfies ToolResult
     } catch (err: unknown) {
       return `Weather fetch failed: ${err instanceof Error ? err.message : String(err)}`
     }

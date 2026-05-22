@@ -92,7 +92,7 @@ export class App implements OnInit, OnDestroy {
     for (const msg of msgs) {
       if (msg.toolResults) {
         try {
-          const results = JSON.parse(msg.toolResults) as { toolName: string; toolResult: string }[]
+          const results = JSON.parse(msg.toolResults) as { toolName: string; toolResult: string; widget?: { type: string; data: Record<string, unknown> } }[]
           for (const tr of results) {
             events.push({
               id: crypto.randomUUID(),
@@ -100,6 +100,7 @@ export class App implements OnInit, OnDestroy {
               toolName: tr.toolName,
               expanded: false,
               toolResult: tr.toolResult,
+              widget: tr.widget,
             })
           }
         } catch { /* skip invalid JSON */ }
@@ -393,7 +394,7 @@ export class App implements OnInit, OnDestroy {
     }
 
     let assistantContent = ''
-    const toolResultAccum: { toolName: string; toolResult: string }[] = []
+    const toolResultAccum: { toolName: string; toolResult: string; widget?: { type: string; data: Record<string, unknown> } }[] = []
     this.chatSubscription = this.api.streamChat(session.id, text).subscribe({
       next: (chunk) => {
         if (this.currentSession()?.id !== session.id) return
@@ -456,7 +457,7 @@ export class App implements OnInit, OnDestroy {
             return copy
           })
           if (chunk.toolName && chunk.toolResult != null) {
-            toolResultAccum.push({ toolName: chunk.toolName, toolResult: chunk.toolResult })
+            toolResultAccum.push({ toolName: chunk.toolName, toolResult: chunk.toolResult, widget: chunk.widget })
             // Patch in-flight assistant message if it exists
             const resultsJson = JSON.stringify(toolResultAccum)
             this.messages.update((m) => {

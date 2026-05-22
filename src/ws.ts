@@ -126,7 +126,7 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
         let fullResponse = ''
         let eventCount = 0
         const startTime = Date.now()
-        const toolResults: {toolName: string; toolResult: string}[] = []
+        const toolResults: {toolName: string; toolResult: string; widget?: { type: string; data: Record<string, unknown> } }[] = []
 
         try {
           for await (const event of agent.run(session.model, ollamaMessages, session.id)) {
@@ -142,7 +142,7 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
               const toolName = event.toolName
               const toolResult = event.toolResult
               if (toolName && toolResult) {
-                toolResults.push({ toolName, toolResult })
+                toolResults.push({ toolName, toolResult, widget: event.widget })
               }
             } else if (event.type === 'status') {
               log.sse(`status     ${event.content?.slice(0, 60)}`)

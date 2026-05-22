@@ -106,7 +106,8 @@ export class BackgroundScheduler {
     let error: string | null = null
     try {
       const args = JSON.parse(task.toolArgs || '{}')
-      result = await tool.execute(args)
+      const toolResult = await tool.execute(args)
+      result = typeof toolResult === 'string' ? toolResult : toolResult.result
     } catch (err: unknown) {
       result = ''
       error = err instanceof Error ? err.message : String(err)
