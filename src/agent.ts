@@ -58,6 +58,7 @@ import { log } from './log.js'
 import { storeMemory, searchMemories, searchKnowledge, addToolCall } from './db.js'
 import { embed } from './embeddings.js'
 import { runOpencodeTask } from './opencode.js'
+import { TOOL_SEND_EMAIL, TOOL_SCHEDULE_TASK } from './tools/constants.js'
 
 const OLLAMA_BASE = process.env.LOCALCLAW_OLLAMA_URL || 'http://localhost:11434'
 const MAX_TOOL_LOOPS = 15
@@ -310,6 +311,7 @@ export class Agent {
     sessionId?: string,
     systemPrompt?: string
   ): AsyncGenerator<AgentEvent> {
+    try {
     let tools = this.buildToolDefs()
     let history = [...messages]
 
@@ -388,7 +390,7 @@ export class Agent {
     // Sent when the model responds with text but was told to call a tool.
     const FORCE_TOOL_MSG: { role: string; content: string } = {
       role: 'system',
-      content: `You did NOT call any tool. Call a tool NOW. Use ${this.toolRegistry.list().filter(t => !['send_email','schedule_task'].includes(t.name)).slice(0, 5).map(t => t.name).join(', ')}, or another tool. Do not apologize — just call one. / Vous n'avez appelé aucun outil. Utilisez un outil immédiatement.`,
+      content: `You did NOT call any tool. Call a tool NOW. Use ${this.toolRegistry.list().filter(t => ![TOOL_SEND_EMAIL, TOOL_SCHEDULE_TASK].includes(t.name)).slice(0, 5).map(t => t.name).join(', ')}, or another tool. Do not apologize — just call one. / Vous n'avez appelé aucun outil. Utilisez un outil immédiatement.`,
     }
 
     // Sent after a weak / empty tool result to push the model toward a
@@ -427,7 +429,7 @@ export class Agent {
 
           // If the user wants an action performed (schedule, send, create),
           // skip the pre-plan and let the agent loop use the registered tools.
-          const actionPattern = /(tous les jours|chaque (jour|semaine|mois)|schedule|remind|rappel|every (day|week|hour|\d+)|daily|weekly|send (to|me)|envoyer|recevoir|telegram|email|write (a|this|the) file|créer|sauvegarder)/i
+          const actionPattern = /(tous les jours|chaque (jour|semaine|mois)|schedule|remind|rappel|every (day|week|hour|\d+)|daily|weekly|send (to|me)|envoyer|recevoir|${TOOL_SEND_EMAIL}|${TOOL_SCHEDULE_TASK}|write (a|this|the) file|créer|sauvegarder)/i
           if (actionPattern.test(query)) {
             log.agent(`Pre-plan: action request detected, skipping to agent loop`)
           } else {
@@ -823,5 +825,10 @@ export class Agent {
 
     // If we exhausted all 15 loops without returning, emit an error.
     yield { type: 'error', error: 'Agent exceeded maximum tool call iterations' }
+    } catch (err: unknown) {
+      const errm = err instanceof Error ? err.message : String(err)
+      log.error(`Unhandled agent error: ${errm}`)
+      yield { type: 'error', error: errm }
+    }
   }
 }

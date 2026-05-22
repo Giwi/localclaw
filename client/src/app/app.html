@@ -4,397 +4,66 @@
   <div style="position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;">
     @for (toast of toasts(); track toast.id) {
       <div
-        style="pointer-events:auto;padding:12px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;animation:fadeIn .25s ease;max-width:360px;cursor:pointer;"
+        style="pointer-events:auto;padding:12px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;animation:fadeIn .25s ease;max-width:360px;cursor:pointer;position:relative;overflow:hidden;"
         [style]="toast.type === 'error' ? 'background:#ef4444;color:#fff;' : toast.type === 'success' ? 'background:#22c55e;color:#fff;' : 'background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border-color);'"
         (click)="removeToast(toast.id)"
       >
         <i class="bi" [class.bi-x-circle]="toast.type === 'error'" [class.bi-check-circle]="toast.type === 'success'" [class.bi-info-circle]="toast.type === 'info'"></i>
         {{ toast.message }}
+        <div style="position:absolute;bottom:0;left:0;height:2px;background:rgba(255,255,255,.5);animation:toastShrink 4s linear forwards;border-radius:0 0 0 var(--radius-sm);"></div>
       </div>
     }
   </div>
 
-  <!-- Sidebar -->
-  <aside
-    class="d-flex flex-column flex-shrink-0 sidebar-glass"
-    [style]="'width:' + (sidebarOpen() ? '260px' : '0px') + ';min-width:' + (sidebarOpen() ? '260px' : '0px') + ';overflow:hidden;transition:width .25s ease,min-width .25s ease;'"
-  >
-    <!-- Sidebar header -->
-    <div class="d-flex align-items-center justify-content-between px-3" style="height:60px;border-bottom:1px solid rgba(255,255,255,.08);">
-      <div class="d-flex align-items-center gap-2">
-        <div class="logo-dot"></div>
-        <span class="brand-text">localclaw</span>
-      </div>
-      <div style="position:relative;">
-        <button class="theme-toggle" (click)="toggleTheme()" title="Switch theme">
-          <i class="bi" [class.bi-moon-fill]="currentTheme() === 'light'" [class.bi-sun-fill]="currentTheme() === 'dark'"></i>
-        </button>
-      </div>
-    </div>
+  <app-sidebar
+    [sidebarOpen]="sidebarOpen()"
+    [sessions]="sessions()"
+    [currentSession]="currentSession()"
+    [sidebarView]="sidebarView()"
+    [backgroundTasks]="backgroundTasks()"
+    [loadingTasks]="loadingTasks()"
+    [renamingId]="renamingId()"
+    [renameInput]="renameInput()"
+    [selectedSessionIndex]="selectedSessionIndex()"
+    [currentTheme]="currentTheme()"
+    (newSession)="newSession()"
+    (selectSession)="selectSession($event)"
+    (deleteSession)="deleteSession($event.event, $event.id)"
+    (startRename)="startRename($event)"
+    (commitRename)="commitRename($event)"
+    (cancelRename)="cancelRename()"
+    (switchSidebarView)="switchSidebarView($event)"
+    (toggleTheme)="toggleTheme()"
+    (toggleTask)="toggleTask($event)"
+    (deleteBgTask)="deleteBgTask($event.event, $event.task)"
+    (onSessionKeydown)="onSessionKeydown($event)"
+    (renameInputChange)="renameInput.set($event)"
+  ></app-sidebar>
 
-    <!-- View switcher -->
-    <div style="display:flex;border-bottom:1px solid var(--glass-border);margin:0 8px;">
-      <button
-        (click)="switchSidebarView('sessions')"
-        style="flex:1;padding:8px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-sidebar-muted);border-bottom:2px solid transparent;transition:all var(--transition);"
-        [style]="sidebarView() === 'sessions' ? 'color:var(--accent);border-bottom-color:var(--accent);' : ''"
-      ><i class="bi bi-chat-dots" style="margin-right:4px;"></i>Sessions</button>
-      <button
-        (click)="switchSidebarView('tasks')"
-        style="flex:1;padding:8px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-sidebar-muted);border-bottom:2px solid transparent;transition:all var(--transition);"
-        [style]="sidebarView() === 'tasks' ? 'color:var(--accent);border-bottom-color:var(--accent);' : ''"
-      ><i class="bi bi-clock" style="margin-right:4px;"></i>Tasks</button>
-    </div>
+  <app-chat-area
+    [currentSession]="currentSession()"
+    [messages]="messages()"
+    [toolEvents]="toolEvents()"
+    [loading]="loading()"
+    [statusMsg]="statusMsg()"
+    [input]="input()"
+    [editingMsg]="editingMsg()"
+    [dragOver]="dragOver()"
+    [sidebarOpen]="sidebarOpen()"
+    (toggleSidebar)="toggleSidebar()"
+    (sendMessage)="send()"
+    (editMessage)="editMessage($event)"
+    (cancelEdit)="cancelEdit()"
+    (stopGeneration)="stopGeneration()"
+    (startRename)="startRename($event)"
+    (deleteCurrent)="deleteCurrent()"
+    (toggleToolEvent)="toggleToolEvent($event)"
+    (copyText)="copyText($event)"
+    (uploadFile)="uploadFile($event)"
+    (dragOverChange)="dragOver.set($event)"
+    (dropFile)="uploadFileDirect($event)"
+    (newSession)="newSession()"
+    (inputChange)="input.set($event)"
+  ></app-chat-area>
 
-    @if (sidebarView() === 'sessions') {
-      <!-- New session -->
-      <div class="p-2">
-        <button
-          class="btn-neon"
-          (click)="newSession()"
-          style="width:100%;padding:9px 14px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:6px;justify-content:center;"
-        >
-          <span><i class="bi bi-plus-lg"></i></span> New Session
-        </button>
-      </div>
-
-      <!-- Session list -->
-      <div
-        #sessionList
-        class="flex-grow-1 overflow-auto"
-        style="padding:4px 8px;"
-        tabindex="0"
-        (keydown)="onSessionKeydown($event)"
-        role="listbox"
-        aria-label="Session list"
-      >
-        @for (session of sessions(); track session.id; let i = $index) {
-          <div
-            class="session-item sidebar-item"
-            [class.active]="currentSession()?.id === session.id"
-            [class.keyboard-selected]="selectedSessionIndex() === i && currentSession()?.id !== session.id"
-            (click)="selectSession(session)"
-            (dblclick)="startRename(session)"
-            role="option"
-            [attr.aria-selected]="currentSession()?.id === session.id"
-            tabindex="-1"
-            style="padding:10px 12px;border-radius:var(--radius-sm);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;"
-          >
-            <div class="text-truncate" style="flex:1;min-width:0;">
-              @if (renamingId() === session.id) {
-                <input
-                  [ngModel]="renameInput()"
-                  (ngModelChange)="renameInput.set($event)"
-                  (keydown.enter)="commitRename(session)"
-                  (keydown.escape)="cancelRename()"
-                  (blur)="commitRename(session)"
-                  (click)="$event.stopPropagation()"
-                  style="width:100%;padding:4px 8px;font-size:13px;border-radius:4px;border:1px solid var(--accent);background:var(--bg-primary);color:var(--text-primary);outline:none;"
-                  autofocus
-                />
-              } @else {
-                <div style="font-size:13px;font-weight:500;color:var(--text-sidebar);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
-                  {{ session.name }}
-                </div>
-              }
-              <div style="font-size:11px;color:var(--text-sidebar-muted);margin-top:2px;">
-                {{ session.model.replace('ollama/', '') }}
-              </div>
-            </div>
-            <button
-              class="session-delete"
-              (click)="deleteSession($event, session.id)"
-              style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px;line-height:1;border-radius:4px;"
-              title="Delete"
-            ><i class="bi bi-x"></i></button>
-          </div>
-        } @empty {
-          <div style="text-align:center;padding:32px 16px;color:var(--text-sidebar-muted);font-size:13px;">
-            No sessions yet
-          </div>
-        }
-      </div>
-    }
-
-    @if (sidebarView() === 'tasks') {
-      <!-- Tasks list -->
-      <div class="flex-grow-1 overflow-auto" style="padding:4px 8px;">
-        @if (loadingTasks()) {
-          <div style="text-align:center;padding:24px;color:var(--text-sidebar-muted);font-size:12px;">Loading...</div>
-        } @else {
-          @for (task of backgroundTasks(); track task.id) {
-            <div
-              class="session-item"
-              style="padding:10px 12px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:space-between;gap:6px;border-left:2px solid;"
-              [style.borderLeftColor]="task.enabled ? 'var(--success)' : 'var(--text-sidebar-muted)'"
-            >
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:12px;font-weight:500;color:var(--text-sidebar);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
-                  {{ task.name }}
-                </div>
-                <div style="font-size:10px;color:var(--text-sidebar-muted);margin-top:2px;">
-                  {{ task.toolName }} · {{ task.schedule }}
-                </div>
-                @if (task.lastError) {
-                  <div style="font-size:10px;color:var(--danger);margin-top:1px;">{{ task.lastError.slice(0, 60) }}</div>
-                }
-              </div>
-              <div style="display:flex;gap:4px;flex-shrink:0;">
-                <button
-                  (click)="toggleTask(task)"
-                  style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px;border-radius:4px;color:var(--success);"
-                  [style]="task.enabled ? '' : 'color:var(--text-sidebar-muted);'"
-                  [title]="task.enabled ? 'Pause' : 'Resume'"
-                ><i class="bi" [class.bi-pause-fill]="task.enabled" [class.bi-play-fill]="!task.enabled"></i></button>
-                <button
-                  class="session-delete"
-                  (click)="deleteBgTask($event, task)"
-                  style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px;line-height:1;border-radius:4px;"
-                  title="Delete"
-                ><i class="bi bi-x"></i></button>
-              </div>
-            </div>
-          } @empty {
-            <div style="text-align:center;padding:32px 16px;color:var(--text-sidebar-muted);font-size:12px;line-height:1.6;">
-              <i class="bi bi-clock" style="font-size:24px;display:block;margin-bottom:8px;opacity:.5;"></i>
-              No scheduled tasks<br>
-              <span style="font-size:11px;">Ask the agent to schedule one.</span>
-            </div>
-          }
-        }
-      </div>
-    }
-
-    <!-- Sidebar footer -->
-    <div style="padding:10px 12px;border-top:1px solid var(--glass-border);font-size:11px;color:var(--text-sidebar-muted);display:flex;align-items:center;justify-content:space-between;">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span class="status-dot"></span>
-        Ollama
-      </div>
-      <span style="font-size:10px;color:var(--text-sidebar-muted);">
-        @if (sidebarView() === 'sessions') { {{ sessions().length }} sessions }
-        @if (sidebarView() === 'tasks') { {{ backgroundTasks().length }} tasks }
-      </span>
-    </div>
-  </aside>
-
-  <!-- Toggle button -->
-  <button
-    (click)="toggleSidebar()"
-    style="position:absolute;top:14px;left:{{ sidebarOpen() ? '268px' : '12px' }};z-index:10;width:32px;height:32px;border-radius:50%;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:left .25s ease;box-shadow:var(--shadow-sm);"
-    title="Toggle sidebar"
-  ><i class="bi" [class.bi-chevron-left]="sidebarOpen()" [class.bi-chevron-right]="!sidebarOpen()"></i></button>
-
-  <!-- Main area -->
-  <main class="d-flex flex-column flex-grow-1" style="background:var(--bg-primary);position:relative;">
-
-    @if (currentSession(); as session) {
-      <!-- Header bar -->
-      <header class="header-glass" style="height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 20px 0 52px;flex-shrink:0;">
-        <div class="d-flex align-items-center gap-2 text-truncate">
-          <span style="font-weight:600;font-size:14px;color:var(--text-primary);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
-            {{ session.name }}
-          </span>
-          <span style="font-size:12px;color:var(--text-secondary);padding:2px 8px;border-radius:4px;background:var(--bg-primary);">
-            {{ session.model.replace('ollama/', '') }}
-          </span>
-        </div>
-        <div class="d-flex align-items-center gap-2">
-          <button (click)="startRename(session)" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Rename"><i class="bi bi-pencil"></i></button>
-          <button (click)="deleteCurrent()" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Delete session"><i class="bi bi-trash"></i></button>
-        </div>
-      </header>
-
-      <!-- Messages -->
-      <div #chatContainer class="flex-grow-1 overflow-auto" style="padding:24px 16px 16px;scroll-behavior:smooth;">
-        <div style="max-width:800px;margin:0 auto;">
-
-          @for (msg of messages(); track msg.id) {
-            <div class="message-enter d-flex mb-4" [class.justify-content-end]="msg.role === 'user'">
-              @if (msg.role !== 'user') {
-                <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;margin-top:4px;margin-right:10px;">L</div>
-              }
-              <div style="max-width:75%;">
-                <div
-                  class="message-content"
-                  style="padding:12px 18px;border-radius:var(--radius-lg);font-size:14px;line-height:1.6;word-wrap:break-word;box-shadow:var(--shadow-sm);"
-                  [style]="msg.role === 'user'
-                    ? 'background:var(--bg-bubble-user);color:var(--text-bubble-user);border-bottom-right-radius:4px;white-space:pre-wrap;'
-                    : 'background:var(--bg-bubble-assistant);color:var(--text-bubble-assistant);border-bottom-left-radius:4px;border:1px solid var(--border-color);'"
-                  [innerHTML]="msg.role === 'user' ? msg.content : (msg.content | markdown | async)"
-                ></div>
-                <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;text-align:right;padding:0 4px;">
-                  {{ formatDate(msg.createdAt) }}
-                  @if (msg.role === 'user' && !loading()) {
-                    <button
-                      (click)="editMessage(msg)"
-                      style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:11px;padding:0 4px;text-decoration:underline;opacity:.6;"
-                      title="Edit"
-                    >edit</button>
-                  }
-                </div>
-              </div>
-              @if (msg.role === 'user') {
-                <div style="width:32px;height:32px;border-radius:50%;background:var(--text-secondary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;margin-top:4px;margin-left:10px;">U</div>
-              }
-            </div>
-          } @empty {
-            <div class="empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;color:var(--text-secondary);text-align:center;">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 2-2 3-4 5-2-2-4-3-4-5a4 4 0 0 1 4-4z"/><path d="M12 11v3"/><path d="M8 16h8"/><path d="M7 21h10"/></svg>
-              <h3 style="font-weight:600;font-size:17px;margin-bottom:6px;color:var(--text-primary);">Autonomous agent ready</h3>
-              <p style="font-size:13px;max-width:340px;line-height:1.5;">I can read and write files, run bash, fetch web content, delegate to OpenCode, and create new tools on the fly.</p>
-            </div>
-          }
-
-          <!-- Tool events -->
-          @for (ev of toolEvents(); track ev.id) {
-            <div class="message-enter mb-3" style="max-width:100%;">
-              <div class="tool-card" [class.active]="ev.type === 'tool_start' || ev.type === 'tool_chunk'" style="background:var(--bg-tool);color:#e5e7eb;border-color:rgba(255,255,255,.1);">
-                @if (ev.type === 'tool_start' || ev.type === 'tool_chunk') {
-                  <div class="tool-card-header" (click)="toggleToolEvent(ev.id)" style="cursor:pointer;">
-                    <span style="width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;display:inline-block;"></span>
-                    <span style="color:var(--accent);font-weight:600;">{{ ev.toolName }}</span>
-                    <span style="color:var(--text-sidebar-muted);margin-left:auto;font-size:11px;">running...</span>
-                    <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'"><i class="bi bi-chevron-right"></i></span>
-                  </div>
-                  @if (ev.expanded) {
-                    <div class="tool-card-body" style="color:#9ca3af;border-color:rgba(255,255,255,.08);">
-                      {{ ev.content || (ev.toolArgs | json) }}
-                    </div>
-                  }
-                }
-                @if (ev.type === 'tool_end') {
-                  <div class="tool-card-header" (click)="toggleToolEvent(ev.id)" style="cursor:pointer;">
-                    <i class="bi bi-check-circle" style="color:var(--success);font-size:16px;"></i>
-                    <span style="font-weight:600;">{{ ev.toolName }}</span>
-                    <span style="color:var(--text-sidebar-muted);margin-left:auto;font-size:11px;">completed</span>
-                    <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'"><i class="bi bi-chevron-right"></i></span>
-                  </div>
-                  @if (ev.expanded && ev.toolResult) {
-                    <div class="tool-card-body" style="color:#9ca3af;border-color:rgba(255,255,255,.08);position:relative;">
-                      <div style="display:flex;justify-content:flex-end;margin-bottom:4px;">
-                        <button
-                          (click)="copyText(ev.toolResult!)"
-                          style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;transition:background .15s;"
-                          title="Copy result"
-                        ><i class="bi bi-clipboard"></i></button>
-                      </div>
-                      @if (!ev.expandedMore && hasMoreLines(ev.toolResult)) {
-                        <div>{{ truncateResult(ev.toolResult) }}</div>
-                        <button
-                          (click)="ev.expandedMore = true; $event.stopPropagation()"
-                          style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;padding:4px 0;width:100%;text-align:center;"
-                        >Show all ({{ ev.toolResult.split('\n').length }} lines)</button>
-                      } @else {
-                        <div>{{ ev.toolResult }}</div>
-                      }
-                    </div>
-                  }
-                }
-                @if (ev.type === 'tool_error') {
-                  <div class="tool-card-header" (click)="toggleToolEvent(ev.id)" style="cursor:pointer;">
-                    <i class="bi bi-x-circle" style="color:var(--danger);font-size:16px;"></i>
-                    <span style="font-weight:600;">{{ ev.toolName }}</span>
-                    <span style="color:var(--danger);margin-left:auto;font-size:11px;">failed</span>
-                    <span style="font-size:12px;transition:transform .2s;color:var(--text-sidebar-muted);margin-left:6px;" [style.transform]="ev.expanded ? 'rotate(90deg)' : 'rotate(0deg)'"><i class="bi bi-chevron-right"></i></span>
-                  </div>
-                  @if (ev.expanded && ev.error) {
-                    <div class="tool-card-body" style="color:#f87171;border-color:rgba(255,255,255,.08);">
-                      {{ ev.error }}
-                    </div>
-                  }
-                }
-              </div>
-            </div>
-          }
-
-          <!-- Loading / thinking indicator -->
-          @if (loading()) {
-            <div class="message-enter d-flex align-items-center gap-3 mb-4">
-              <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;">L</div>
-              <div style="background:var(--bg-bubble-assistant);border:1px solid var(--border-color);border-radius:var(--radius-lg);border-bottom-left-radius:4px;padding:16px 20px;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow-sm);">
-                <span class="typing-dot"></span>
-                <span class="typing-dot"></span>
-                <span class="typing-dot"></span>
-                @if (statusMsg()) {
-                  <span style="font-size:12px;color:var(--text-secondary);margin-left:4px;">{{ statusMsg() }}</span>
-                }
-              </div>
-            </div>
-          }
-
-          <!-- Stop generation -->
-          @if (loading()) {
-            <div style="display:flex;justify-content:center;padding:8px 0;">
-              <button
-                (click)="stopGeneration()"
-                style="padding:6px 18px;border-radius:var(--radius-sm);background:var(--danger);color:#fff;border:none;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;opacity:.9;transition:opacity .15s;"
-                onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.9'"
-              >
-                <i class="bi bi-stop-fill" style="font-size:12px;"></i> Stop
-              </button>
-            </div>
-          }
-        </div>
-      </div>
-
-      <!-- Input -->
-      <div style="padding:12px 16px 16px;border-top:1px solid var(--border-color);background:var(--bg-primary);flex-shrink:0;">
-        <div class="input-container" style="max-width:800px;margin:0 auto;display:flex;gap:8px;background:var(--bg-input);padding:4px;">
-          <label
-            style="padding:10px 8px;cursor:pointer;color:var(--text-secondary);font-size:16px;display:flex;align-items:center;border-radius:8px;transition:background var(--transition);"
-            [style]="loading() ? 'opacity:.4;pointer-events:none;' : ''"
-            title="Upload file"
-          >
-            <i class="bi bi-paperclip"></i>
-            <input type="file" (change)="uploadFile($event)" style="display:none" [disabled]="loading()" />
-          </label>
-          <input
-            class="input-glow"
-            placeholder="Ask me anything..."
-            [ngModel]="input()"
-            (ngModelChange)="input.set($event)"
-            (keydown.enter)="send()"
-            [disabled]="loading()"
-            style="flex:1;border:none;outline:none;padding:10px 14px;font-size:14px;background:transparent;color:var(--text-primary);border-radius:10px;"
-          />
-          @if (editingMsg()) {
-            <button
-              class="btn-send"
-              (click)="cancelEdit()"
-              style="padding:10px 16px;border-radius:10px;background:transparent;border:1px solid var(--border-color);color:var(--text-secondary);cursor:pointer;font-size:13px;"
-            >Cancel</button>
-          }
-          <button
-            class="btn-send"
-            (click)="send()"
-            [disabled]="loading() || !input().trim()"
-            style="padding:10px 20px;border-radius:10px;display:flex;align-items:center;gap:6px;"
-          >
-            Send
-            <i class="bi bi-arrow-right"></i>
-          </button>
-        </div>
-        <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--text-secondary);">
-          localclaw &middot; autonomous agent &middot; ollama + opencode
-        </div>
-      </div>
-    } @else {
-      <!-- Empty state (no session) -->
-      <div class="d-flex align-items-center justify-content-center flex-grow-1" style="color:var(--text-secondary);">
-        <div class="empty-state" style="text-align:center;max-width:380px;">
-          <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 20px;display:block;opacity:.4;">
-            <path d="M12 2a4 4 0 0 1 4 4c0 2-2 3-4 5-2-2-4-3-4-5a4 4 0 0 1 4-4z"/><path d="M12 11v3"/><path d="M8 16h8"/><path d="M7 21h10"/>
-          </svg>
-          <h2 style="font-weight:600;font-size:20px;margin-bottom:8px;color:var(--text-primary);">localclaw</h2>
-          <p style="font-size:14px;line-height:1.6;margin-bottom:24px;">Autonomous AI agent powered by Ollama + OpenCode.<br>Creates its own tools, runs code, fetches the web, and gets things done.</p>
-          <button
-            (click)="newSession()"
-            style="padding:12px 32px;border:none;border-radius:var(--radius-md);background:var(--accent);color:#fff;font-size:15px;font-weight:500;cursor:pointer;transition:opacity var(--transition);"
-            onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'"
-          >Start a session</button>
-        </div>
-      </div>
-    }
-  </main>
 </div>

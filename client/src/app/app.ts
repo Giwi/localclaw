@@ -1,9 +1,8 @@
-import { Component, OnInit, inject, signal, viewChild, ElementRef, OnDestroy } from '@angular/core'
-import { FormsModule } from '@angular/forms'
-import { JsonPipe, AsyncPipe } from '@angular/common'
+import { Component, OnInit, inject, signal, OnDestroy } from '@angular/core'
 import { Subscription } from 'rxjs'
-import { ChatService, type Session, type Message, type BackgroundTask } from './chat.service'
-import { MarkdownPipe } from './markdown.pipe'
+import { ChatService, type Session, type Message, type BackgroundTask, type ToolEvent } from './chat.service'
+import { SidebarComponent } from './sidebar.component'
+import { ChatAreaComponent } from './chat-area.component'
 
 export interface Toast {
   id: string
@@ -11,21 +10,9 @@ export interface Toast {
   type: 'success' | 'error' | 'info'
 }
 
-export interface ToolEvent {
-  id: string
-  type: 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error'
-  toolName: string
-  expanded: boolean
-  expandedMore?: boolean
-  toolArgs?: Record<string, any>
-  toolResult?: string
-  content?: string
-  error?: string
-}
-
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, JsonPipe, AsyncPipe, MarkdownPipe],
+  imports: [SidebarComponent, ChatAreaComponent],
   templateUrl: './app.html',
 })
 export class App implements OnInit, OnDestroy {
@@ -48,12 +35,11 @@ export class App implements OnInit, OnDestroy {
   selectedSessionIndex = signal(0)
   backgroundTasks = signal<BackgroundTask[]>([])
   loadingTasks = signal(false)
+  dragOver = signal(false)
 
+  private toastTimers: Record<string, ReturnType<typeof setTimeout>> = {}
   private chatSubscription: Subscription | null = null
   private loadingTimeout: ReturnType<typeof setTimeout> | null = null
-
-  chatContainer = viewChild<ElementRef>('chatContainer')
-  sessionListEl = viewChild<ElementRef>('sessionList')
 
   ngOnInit() {
     const saved = localStorage.getItem('localclaw-theme')
@@ -71,13 +57,16 @@ export class App implements OnInit, OnDestroy {
     if (this.loadingTimeout) clearTimeout(this.loadingTimeout)
   }
 
-  showToast(message: string, type: Toast['type'] = 'info') {
+  showToast(message: string, type: Toast['type'] = 'info', duration = 4000): string {
     const id = crypto.randomUUID()
     this.toasts.update((t) => [...t, { id, message, type }])
-    setTimeout(() => this.removeToast(id), 4000)
+    const timer = setTimeout(() => this.removeToast(id), duration)
+    this.toastTimers[id] = timer
+    return id
   }
 
   removeToast(id: string) {
+    if (this.toastTimers[id]) { clearTimeout(this.toastTimers[id]); delete this.toastTimers[id] }
     this.toasts.update((t) => t.filter((x) => x.id !== id))
   }
 
@@ -238,32 +227,8 @@ export class App implements OnInit, OnDestroy {
     return `${s} · next: ${next} · last: ${last}`
   }
 
-  onSessionKeydown(e: KeyboardEvent) {
-    const list = this.sessions()
-    if (list.length === 0) return
-    let idx = this.selectedSessionIndex()
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      idx = (idx + 1) % list.length
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      idx = (idx - 1 + list.length) % list.length
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      this.selectSession(list[idx])
-      return
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
-      e.preventDefault()
-      const target = list[idx]
-      if (target) this.deleteSession(e as unknown as Event, target.id)
-      return
-    }
-    this.selectedSessionIndex.set(idx)
-    const el = this.sessionListEl()?.nativeElement
-    if (el) {
-      const child = el.children[idx] as HTMLElement
-      child?.focus()
-    }
+  onSessionKeydown(_event: KeyboardEvent) {
+    // Keyboard navigation handled in sidebar component
   }
 
   uploadFile(event: Event) {
@@ -274,12 +239,23 @@ export class App implements OnInit, OnDestroy {
     this.api.uploadFile(session.id, file).subscribe({
       next: (msg) => {
         this.messages.update((m) => [...m, msg])
-        this.scrollDown()
         this.showToast('File uploaded', 'success')
       },
       error: () => this.showToast('Failed to upload file', 'error'),
     })
     target.value = ''
+  }
+
+  uploadFileDirect(file: File) {
+    const session = this.currentSession()
+    if (!session) return
+    this.api.uploadFile(session.id, file).subscribe({
+      next: (msg) => {
+        this.messages.update((m) => [...m, msg])
+        this.showToast('File uploaded', 'success')
+      },
+      error: () => this.showToast('Failed to upload file', 'error'),
+    })
   }
 
   editMessage(msg: Message) {
@@ -338,7 +314,6 @@ export class App implements OnInit, OnDestroy {
     }
 
     this.loading.set(true)
-    this.scrollDown()
     if (this.loadingTimeout) clearTimeout(this.loadingTimeout)
     this.loadingTimeout = setTimeout(() => {
       this.loading.set(false)
@@ -384,7 +359,6 @@ export class App implements OnInit, OnDestroy {
               createdAt: new Date().toISOString(),
             }])
           }
-          this.scrollDown()
         }
 
         if (chunk.type === 'tool_start') {
@@ -409,7 +383,6 @@ export class App implements OnInit, OnDestroy {
             }
             return copy
           })
-          this.scrollDown()
         }
         if (chunk.type === 'tool_end') {
           this.toolEvents.update((e) => {
@@ -436,29 +409,8 @@ export class App implements OnInit, OnDestroy {
     })
   }
 
-  scrollDown() {
-    setTimeout(() => {
-      const el = this.chatContainer()?.nativeElement
-      if (el) el.scrollTop = el.scrollHeight
-    }, 30)
-  }
-
   toggleToolEvent(id: string) {
     this.toolEvents.update((e) => e.map((ev) => ev.id === id ? { ...ev, expanded: !ev.expanded } : ev))
-  }
-
-  formatDate(date: string) {
-    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-
-  truncateResult(text: string, maxLines = 8): string {
-    const lines = text.split('\n')
-    if (lines.length <= maxLines) return text
-    return lines.slice(0, maxLines).join('\n') + `\n... (${lines.length - maxLines} more lines)`
-  }
-
-  hasMoreLines(text: string, maxLines = 8): boolean {
-    return text.split('\n').length > maxLines
   }
 
   async copyText(text: string) {

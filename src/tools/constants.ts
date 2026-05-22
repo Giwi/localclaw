@@ -1,0 +1,5 @@
+export const TOOL_SCHEDULE_TASK = 'schedule_task'
+export const TOOL_SEARCH_KNOWLEDGE = 'search_knowledge'
+export const TOOL_SEND_EMAIL = 'send_email'
+export const TOOL_SEND_TELEGRAM = 'send_telegram'
+export const TOOL_CREATE_TOOL = 'create_tool'

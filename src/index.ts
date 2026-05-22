@@ -89,8 +89,8 @@ if (httpsKeyPath && httpsCertPath && fs.existsSync(httpsKeyPath) && fs.existsSyn
   server = http.createServer(app)
 }
 
-app.use(cors())
-app.use(express.json())
+app.use(cors({ origin: process.env.LOCALCLAW_ORIGIN || 'http://localhost:4200', credentials: true }))
+app.use(express.json({ limit: '1mb' }))
 app.use('/api', authMiddleware, createRouter(db, agent))
 
 // WebSocket for real-time chat

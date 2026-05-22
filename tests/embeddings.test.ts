@@ -31,12 +31,11 @@ describe('cosineSimilarity', () => {
     expect(cosineSimilarity([5], [-5])).toBeCloseTo(-1)
   })
 
-  it('returns NaN for vectors of different lengths', () => {
-    const result = cosineSimilarity([1, 2, 3], [1, 2])
-    expect(result).toBeNaN()
+  it('returns 0 for vectors of different lengths', () => {
+    expect(cosineSimilarity([1, 2, 3], [1, 2])).toBe(0)
   })
 
-  it('returns 0 for empty arrays (denominator is zero)', () => {
+  it('returns 0 for empty arrays', () => {
     expect(cosineSimilarity([], [])).toBe(0)
   })
 

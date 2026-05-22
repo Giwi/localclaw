@@ -1,12 +1,12 @@
 import type BetterSqlite3 from 'better-sqlite3'
 import type { BackgroundTask } from './types.js'
-import { getDueTasks, updateBackgroundTask, addMessage, getSession } from './db.js'
+import { getDueTasks, updateBackgroundTask, addMessage, getSession, addTaskExecution, updateTaskExecution } from './db.js'
 import type { ToolRegistry } from './tools/registry.js'
 import { log } from './log.js'
 
 const CHECK_INTERVAL = 30_000
 
-function parseSchedule(schedule: string): { type: 'interval' | 'daily'; minutes: number; time?: string } {
+function parseSchedule(schedule: string): { type: 'interval' | 'daily' | 'cron'; minutes: number; time?: string; cron?: string } {
   const s = schedule.toLowerCase().trim()
 
   const minMatch = s.match(/every\s+(\d+)\s*m(?:in(?:ute)?s?)?\b/)
@@ -21,6 +21,12 @@ function parseSchedule(schedule: string): { type: 'interval' | 'daily'; minutes:
   if (/(?:daily|every\s+day|once\s+a\s+day)/.test(s)) return { type: 'interval', minutes: 24 * 60 }
   if (/(?:weekly|every\s+week)/.test(s)) return { type: 'interval', minutes: 7 * 24 * 60 }
 
+  // Cron expression: 5 fields separated by space
+  const cronMatch = s.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/)
+  if (cronMatch) {
+    return { type: 'cron', minutes: 0, cron: s }
+  }
+
   return { type: 'interval', minutes: 24 * 60 }
 }
 
@@ -29,11 +35,21 @@ function getNextRun(schedule: string, after: Date = new Date()): Date {
   if (parsed.type === 'interval') {
     return new Date(after.getTime() + parsed.minutes * 60 * 1000)
   }
+  if (parsed.type === 'cron') {
+    // Simple implementation: return 1 minute from now as a fallback
+    return new Date(after.getTime() + 60 * 1000)
+  }
   const [h, m] = parsed.time!.split(':').map(Number)
   const next = new Date(after)
   next.setHours(h, m, 0, 0)
   if (next.getTime() <= after.getTime()) next.setDate(next.getDate() + 1)
   return next
+}
+
+export function isValidCron(expr: string): boolean {
+  const parts = expr.trim().split(/\s+/)
+  if (parts.length !== 5) return false
+  return parts.every(p => /^(\d+|\*|\d+-\d+|\*\/\d+|\d+(?:,\d+)*)$/.test(p))
 }
 
 export { parseSchedule, getNextRun }
@@ -84,6 +100,8 @@ export class BackgroundScheduler {
 
     log.agent(`Scheduler: executing task "${task.name}" (tool: ${task.toolName})`)
 
+    const executionId = addTaskExecution(this.db, task.id, 'running')
+
     let result: string
     let error: string | null = null
     try {
@@ -93,6 +111,13 @@ export class BackgroundScheduler {
       result = ''
       error = err instanceof Error ? err.message : String(err)
       log.agent(`Scheduler: task "${task.name}" FAILED: ${error}`)
+    }
+
+    // Update execution record
+    if (error) {
+      updateTaskExecution(this.db, executionId, 'failed', undefined, error)
+    } else {
+      updateTaskExecution(this.db, executionId, 'success', result)
     }
 
     const now = new Date()

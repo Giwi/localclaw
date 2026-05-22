@@ -6,7 +6,7 @@
   --bg-secondary: #ffffff;
   --bg-sidebar: rgba(15, 20, 35, .92);
   --bg-sidebar-hover: rgba(255, 255, 255, .06);
-  --bg-sidebar-active: rgba(0, 200, 255, .15);
+  --bg-sidebar-active: rgba(0, 152, 219, .12);
   --bg-bubble-user: var(--accent);
   --bg-bubble-assistant: #ffffff;
   --bg-tool: rgba(15, 20, 35, .92);
@@ -22,8 +22,6 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, .05);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, .07);
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, .1);
-  --glow: 0 0 20px rgba(0, 200, 255, .25);
-  --glow-strong: 0 0 40px rgba(0, 200, 255, .35);
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -31,12 +29,12 @@
   --accent: #0098db;
   --accent-hover: #0080c0;
   --accent-subtle: rgba(0, 152, 219, .1);
-  --accent-glow: rgba(0, 200, 255, .4);
   --danger: #ef4444;
   --success: #22c55e;
   --transition: .2s cubic-bezier(.4, 0, .2, 1);
   --glass-bg: rgba(255, 255, 255, .06);
   --glass-border: rgba(255, 255, 255, .08);
+  --tool-text: #c8d0dc;
 }
 
 /* ── Dark ── */
@@ -45,7 +43,7 @@
   --bg-secondary: #161c2e;
   --bg-sidebar: rgba(6, 10, 22, .95);
   --bg-sidebar-hover: rgba(255, 255, 255, .05);
-  --bg-sidebar-active: rgba(0, 200, 255, .1);
+  --bg-sidebar-active: rgba(0, 152, 219, .1);
   --bg-bubble-user: var(--accent);
   --bg-bubble-assistant: #1a2338;
   --bg-tool: rgba(6, 10, 22, .95);
@@ -61,11 +59,25 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, .5);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, .6);
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, .7);
-  --glow: 0 0 20px rgba(0, 200, 255, .2);
-  --glow-strong: 0 0 40px rgba(0, 200, 255, .3);
   --glass-bg: rgba(255, 255, 255, .04);
   --glass-border: rgba(255, 255, 255, .06);
+  --tool-text: #9ca3af;
 }
+
+/* ── Component hosts ── */
+app-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+app-chat-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
 html, body { height: 100%; }
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -80,7 +92,7 @@ body {
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--text-secondary); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent); box-shadow: var(--glow); }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
 /* ── Animations ── */
 @keyframes fadeIn {
@@ -102,26 +114,13 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-@keyframes toolPulse {
-  0% { border-color: var(--accent); box-shadow: var(--glow); }
-  50% { border-color: transparent; box-shadow: none; }
-  100% { border-color: var(--accent); box-shadow: var(--glow); }
-}
 @keyframes popIn {
   from { opacity: 0; transform: scale(.92) translateY(-6px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
-@keyframes glowPulse {
-  0%, 100% { box-shadow: var(--glow); }
-  50% { box-shadow: var(--glow-strong); }
-}
-@keyframes shimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
-}
-@keyframes borderGlow {
-  0%, 100% { border-color: var(--accent); }
-  50% { border-color: rgba(0, 200, 255, .3); }
+@keyframes toastShrink {
+  from { width: 100%; }
+  to { width: 0%; }
 }
 
 .message-enter { animation: fadeIn .3s ease; }
@@ -136,7 +135,6 @@ body {
   width: 8px; height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
   animation: pulse 1.4s infinite both;
 }
 .typing-dot:nth-child(2) { animation-delay: .2s; }
@@ -148,7 +146,6 @@ body {
   width: 6px; height: 6px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
   animation: thinkingDot 1.2s ease-in-out infinite both;
   flex-shrink: 0;
 }
@@ -174,7 +171,6 @@ body {
 }
 .tool-card.active {
   border-color: var(--accent);
-  animation: toolPulse 2s infinite;
 }
 .tool-card:not(.active):hover {
   border-color: rgba(255, 255, 255, .15);
@@ -198,7 +194,7 @@ body {
   border-top: 1px solid var(--glass-border);
   white-space: pre-wrap;
   word-break: break-all;
-  color: #c8d0dc;
+  color: var(--tool-text);
 }
 
 /* ── Input glow ── */
@@ -220,16 +216,13 @@ body {
 .theme-toggle:hover {
   background: var(--bg-sidebar-hover);
   color: var(--text-sidebar);
-  box-shadow: 0 0 16px rgba(0, 200, 255, .15);
 }
 
-/* ── Logo glow ── */
+/* ── Logo dot ── */
 .logo-dot {
   width: 8px; height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 12px var(--accent-glow), 0 0 24px var(--accent-glow);
-  animation: glowPulse 3s ease-in-out infinite;
 }
 
 /* ── Empty state ── */
@@ -246,51 +239,43 @@ body {
 .session-item.active {
   background: var(--bg-sidebar-active);
   border-left-color: var(--accent);
-  box-shadow: inset 3px 0 8px rgba(0, 200, 255, .08);
 }
 
-/* ── Brand text gradient ── */
+/* ── Brand text ── */
 .brand-text {
   font-weight: 700;
   font-size: 15px;
   letter-spacing: -.3px;
-  background: linear-gradient(135deg, var(--accent), #00e5ff, var(--accent));
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: shimmer 4s linear infinite;
+  color: var(--accent);
 }
 
 /* ── New session button ── */
 .btn-neon {
   border: none;
-  background: linear-gradient(135deg, var(--accent), #0080c0) !important;
+  background: var(--accent) !important;
   color: #fff;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition);
-  box-shadow: 0 0 16px rgba(0, 152, 219, .25);
 }
 .btn-neon:hover {
-  box-shadow: 0 0 32px rgba(0, 152, 219, .45);
+  background: var(--accent-hover) !important;
   transform: translateY(-1px);
 }
 
 /* ── Send button ── */
 .btn-send {
   border: none;
-  background: linear-gradient(135deg, var(--accent), #0080c0) !important;
+  background: var(--accent) !important;
   color: #fff;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition);
-  box-shadow: 0 0 12px rgba(0, 152, 219, .2);
 }
 .btn-send:hover:not(:disabled) {
-  box-shadow: 0 0 24px rgba(0, 152, 219, .4);
+  background: var(--accent-hover) !important;
   transform: translateY(-1px);
 }
 .btn-send:disabled {
@@ -322,8 +307,6 @@ body {
   width: 6px; height: 6px;
   border-radius: 50%;
   background: #22c55e;
-  box-shadow: 0 0 8px rgba(34, 197, 94, .5);
-  animation: glowPulse 3s ease-in-out infinite;
 }
 
 /* ── Markdown in messages ── */
@@ -366,7 +349,6 @@ body {
   font-size: inherit;
 }
 .message-content a { color: var(--accent); text-decoration: underline; }
-.message-content a:hover { text-shadow: 0 0 8px var(--accent-glow); }
 .message-content blockquote {
   border-left: 3px solid var(--accent);
   margin: 8px 0;
@@ -404,20 +386,16 @@ body {
 
 /* ── Mobile responsive ── */
 @media (max-width: 768px) {
-  aside[style*="sidebar"] {
+  app-sidebar {
     position: fixed !important;
     top: 0; left: 0;
     height: 100dvh !important;
     z-index: 1000;
-    width: 280px !important;
-    min-width: 280px !important;
   }
-  aside[style*="sidebar"]:not([style*="width:280px"]) {
+  aside.sidebar-glass[style*="width:0"] {
     width: 0px !important;
     min-width: 0px !important;
-  }
-  .sidebar-backdrop {
-    display: block !important;
+    overflow: hidden !important;
   }
   main header {
     padding-left: 52px !important;

@@ -28,6 +28,7 @@ interface WSMessage {
   type: string
   sessionId?: string
   message?: string
+  token?: string
 }
 
 const PING_INTERVAL = 15_000
@@ -44,6 +45,7 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
   wss.on('connection', (ws: WebSocket) => {
     let currentSessionId: string | null = null
     let busy = false
+    let authenticated = !process.env.LOCALCLAW_API_KEY
     let pingTimer: ReturnType<typeof setInterval> | null = null
 
     pingTimer = setInterval(() => {
@@ -72,6 +74,22 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
         msg = JSON.parse(raw.toString())
       } catch {
         safeSend(ws, JSON.stringify({ type: 'error', error: 'invalid JSON' }))
+        return
+      }
+
+      // Auth step: require { type: "auth", token: "..." } when API key is set
+      if (!authenticated) {
+        if (msg.type === 'auth') {
+          if (msg.token === process.env.LOCALCLAW_API_KEY) {
+            authenticated = true
+            safeSend(ws, JSON.stringify({ type: 'auth', ok: true }))
+          } else {
+            safeSend(ws, JSON.stringify({ type: 'error', error: 'Unauthorized' }))
+            ws.close(4001, 'Unauthorized')
+          }
+        } else {
+          safeSend(ws, JSON.stringify({ type: 'error', error: 'Authenticate first' }))
+        }
         return
       }
 

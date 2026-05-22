@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseSchedule, getNextRun } from '../src/scheduler.js'
+import { parseSchedule, getNextRun, isValidCron } from '../src/scheduler.js'
 
 describe('parseSchedule', () => {
   it('parses "every 5m"', () => {
@@ -76,6 +76,12 @@ describe('parseSchedule', () => {
     expect(parseSchedule('every 5h')).toEqual({ type: 'interval', minutes: 300 })
     expect(parseSchedule('every 5m')).toEqual({ type: 'interval', minutes: 5 })
   })
+
+  it('recognizes cron expressions', () => {
+    const result = parseSchedule('30 9 * * 1-5')
+    expect(result.type).toBe('cron')
+    expect(result.cron).toBe('30 9 * * 1-5')
+  })
 })
 
 describe('getNextRun', () => {
@@ -105,5 +111,41 @@ describe('getNextRun', () => {
   it('handles weekly interval', () => {
     const next = getNextRun('weekly', base)
     expect(next.getTime()).toBe(base.getTime() + 7 * 24 * 60 * 60 * 1000)
+  })
+
+  it('returns a future date for cron expressions', () => {
+    const next = getNextRun('30 9 * * 1-5', base)
+    expect(next.getTime()).toBe(base.getTime() + 60 * 1000)
+  })
+
+  it('always returns a date in the future', () => {
+    const next = getNextRun('every 1m')
+    expect(next.getTime()).toBeGreaterThan(Date.now())
+  })
+})
+
+describe('isValidCron', () => {
+  it('accepts valid 5-field cron expressions', () => {
+    expect(isValidCron('*/5 * * * *')).toBe(true)
+    expect(isValidCron('30 9 * * 1-5')).toBe(true)
+    expect(isValidCron('0 0 1 * *')).toBe(true)
+    expect(isValidCron('15,45 * * * *')).toBe(true)
+  })
+
+  it('rejects expressions with fewer than 5 fields', () => {
+    expect(isValidCron('* * * *')).toBe(false)
+    expect(isValidCron('* * *')).toBe(false)
+  })
+
+  it('rejects expressions with more than 5 fields', () => {
+    expect(isValidCron('* * * * * *')).toBe(false)
+  })
+
+  it('rejects expressions with invalid characters', () => {
+    expect(isValidCron('x * * * *')).toBe(false)
+  })
+
+  it('rejects empty string', () => {
+    expect(isValidCron('')).toBe(false)
   })
 })

@@ -21,6 +21,7 @@ interface BackgroundTaskRow {
 }
 interface FtsRow { rowid: number }
 
+const EMBED_CACHE_MAX = 500
 const embedCache = new Map<string, number[]>()
 
 export function clearEmbedCache() {
@@ -33,7 +34,13 @@ function parseEmbedding(raw: string | null): number[] | null {
   if (cached) return cached
   try {
     const parsed = JSON.parse(raw) as number[]
-    if (parsed.length > 0) embedCache.set(raw, parsed)
+    if (parsed.length > 0) {
+      embedCache.set(raw, parsed)
+      if (embedCache.size > EMBED_CACHE_MAX) {
+        const firstKey = embedCache.keys().next().value
+        if (firstKey !== undefined) embedCache.delete(firstKey)
+      }
+    }
     return parsed
   } catch {
     return null
@@ -117,10 +124,20 @@ export function openDb(dataDir: string): BetterSqlite3.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id, created_at);
+    CREATE TABLE IF NOT EXISTS task_executions (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL REFERENCES background_tasks(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK(status IN ('running','success','failed')),
+      result TEXT,
+      error TEXT,
+      started_at TEXT NOT NULL,
+      finished_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_task_executions_task ON task_executions(task_id, started_at);
   `)
 
   log.debug('Database schema ready')
-  backfillMissingEmbeddings(db)
+  // Backfill not run automatically. To migrate old data, call backfillMissingEmbeddings(db) manually.
   return db
 }
 
@@ -160,6 +177,7 @@ export function deleteMessagesAfter(db: BetterSqlite3.Database, sessionId: strin
   const msg = db.prepare('SELECT created_at FROM messages WHERE id = ?').get(messageId) as { created_at: string } | undefined
   if (!msg) return
   db.prepare('DELETE FROM messages WHERE session_id = ? AND created_at > ?').run(sessionId, msg.created_at)
+  db.prepare('DELETE FROM tool_calls WHERE session_id = ? AND created_at > ?').run(sessionId, msg.created_at)
 }
 
 export function addToolCall(db: BetterSqlite3.Database, call: {
@@ -284,6 +302,28 @@ export function updateBackgroundTask(db: BetterSqlite3.Database, id: string, upd
 
 export function deleteBackgroundTask(db: BetterSqlite3.Database, id: string): void {
   db.prepare('DELETE FROM background_tasks WHERE id = ?').run(id)
+}
+
+export function addTaskExecution(db: BetterSqlite3.Database, taskId: string, status: string, result?: string, error?: string): string {
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  db.prepare(
+    'INSERT INTO task_executions (id, task_id, status, result, error, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, taskId, status, result || null, error || null, now, status !== 'running' ? now : null)
+  return id
+}
+
+export function getTaskExecutions(db: BetterSqlite3.Database, taskId: string, limit = 20): { id: string; status: string; result: string | null; error: string | null; startedAt: string; finishedAt: string | null }[] {
+  return (db.prepare(
+    'SELECT id, status, result, error, started_at as startedAt, finished_at as finishedAt FROM task_executions WHERE task_id = ? ORDER BY started_at DESC LIMIT ?'
+  ).all(taskId, limit) as any[])
+}
+
+export function updateTaskExecution(db: BetterSqlite3.Database, id: string, status: string, result?: string, error?: string): void {
+  const now = new Date().toISOString()
+  db.prepare(
+    'UPDATE task_executions SET status = ?, result = ?, error = ?, finished_at = ? WHERE id = ?'
+  ).run(status, result || null, error || null, now, id)
 }
 
 export function getDueTasks(db: BetterSqlite3.Database): BackgroundTask[] {

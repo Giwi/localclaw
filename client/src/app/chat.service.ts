@@ -33,6 +33,18 @@ export interface BackgroundTask {
   createdAt: string
 }
 
+export interface ToolEvent {
+  id: string
+  type: 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error'
+  toolName: string
+  expanded: boolean
+  expandedMore?: boolean
+  toolArgs?: Record<string, any>
+  toolResult?: string
+  content?: string
+  error?: string
+}
+
 export interface StreamChunk {
   type: 'text' | 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error' | 'status' | 'done' | 'error'
   content?: string

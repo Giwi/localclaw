@@ -18,6 +18,7 @@ import {
   getBackgroundTask,
   updateBackgroundTask,
   deleteBackgroundTask,
+  getTaskExecutions,
   addKnowledgeDocument,
   addKnowledgeChunk,
   listKnowledgeDocuments,
@@ -126,6 +127,22 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
     res.json(task)
   })
 
+  // GET /api/background-tasks/:id/logs - get execution history for a task
+  router.get('/background-tasks/:id/logs', (req: Request, res: Response) => {
+    const task = getBackgroundTask(db, req.params.id)
+    if (!task) { res.status(404).json({ error: 'Background task not found' }); return }
+    const history = getTaskExecutions(db, req.params.id)
+    res.json({ task, history })
+  })
+
+  // POST /api/background-tasks/:id/run - manually trigger a task run
+  router.post('/background-tasks/:id/run', (req: Request, res: Response) => {
+    const task = getBackgroundTask(db, req.params.id)
+    if (!task) { res.status(404).json({ error: 'Background task not found' }); return }
+    updateBackgroundTask(db, task.id, { nextRunAt: new Date().toISOString() })
+    res.json({ ok: true, message: 'Task triggered' })
+  })
+
   router.get('/knowledge', (_req: Request, res: Response) => {
     const docs = listKnowledgeDocuments(db)
     res.json(docs)
@@ -148,6 +165,7 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
       if (ext === '.txt' || ext === '.md') {
         text = fs.readFileSync(file.path, 'utf-8')
       } else if (ext === '.pdf') {
+        if (!/^[a-zA-Z0-9_./-]+$/.test(file.path)) throw new Error('Invalid file path')
         const outPath = file.path + '.txt'
         execSync(`pdftotext -layout "${file.path}" "${outPath}"`, { timeout: 30000 })
         text = fs.readFileSync(outPath, 'utf-8')
@@ -157,8 +175,9 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
       }
     } catch {
       text = `[Uploaded file: ${file.originalname}]`
+    } finally {
+      try { fs.unlinkSync(file.path) } catch {}
     }
-    try { fs.unlinkSync(file.path) } catch {}
     const msg = addMessage(db, { sessionId: req.params.id, role: 'user', content: text.trim() || `[Uploaded: ${file.originalname}]` })
     res.json(msg)
   })
@@ -179,11 +198,13 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
       if (ext === '.txt' || ext === '.md') {
         text = fs.readFileSync(file.path, 'utf-8')
       } else if (ext === '.pdf') {
+        if (!/^[a-zA-Z0-9_./-]+$/.test(file.path)) throw new Error('Invalid file path')
         const outPath = file.path + '.txt'
         execSync(`pdftotext -layout "${file.path}" "${outPath}"`, { timeout: 30000 })
         text = fs.readFileSync(outPath, 'utf-8')
         try { fs.unlinkSync(outPath) } catch {}
       } else if (ext === '.docx') {
+        if (!/^[a-zA-Z0-9_./-]+$/.test(file.path)) throw new Error('Invalid file path')
         text = execSync(
           `python3 -c "
 import sys, json
@@ -199,14 +220,14 @@ except Exception as e:
         text = JSON.parse(text)
       } else {
         res.status(400).json({ error: `Unsupported file type: ${ext}. Supported: .txt, .md, .pdf, .docx` })
-        try { fs.unlinkSync(file.path) } catch {}
         return
       }
     } catch (err: unknown) {
       const errm = err instanceof Error ? err.message : String(err)
       res.status(500).json({ error: `Failed to extract text: ${errm}` })
-      try { fs.unlinkSync(file.path) } catch {}
       return
+    } finally {
+      try { fs.unlinkSync(file.path) } catch {}
     }
 
     text = text.trim()
@@ -242,8 +263,6 @@ except Exception as e:
         embedded++
       } catch { /* skip failed chunks */ }
     }
-
-    try { fs.unlinkSync(file.path) } catch {}
 
     log.info(`Knowledge: "${file.originalname}" → ${chunks.length} chunks, ${embedded} embedded`)
     res.json({

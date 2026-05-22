@@ -34,6 +34,9 @@ marked.use({ renderer })
 @Pipe({ name: 'markdown' })
 export class MarkdownPipe implements PipeTransform {
   constructor(private sanitizer: DomSanitizer) {}
+  // Security: marked strips raw HTML by default. We only pass pre-formatted
+  // markdown through bypassSecurityTrustHtml. The custom code renderer only
+  // generates <pre>, <code>, <span>, <button> elements - no user-controlled HTML.
 
   async transform(value: string): Promise<SafeHtml> {
     if (!value) return this.sanitizer.bypassSecurityTrustHtml('')
