@@ -132,6 +132,7 @@ export class Agent {
     let stuckCount = 0
     let dynamicToolAttempts = 0
     let emptyCount = 0
+    let skipPlanning = false  // Set by pre-plan when query already targets a known tool
 
     // ---- Pre-planning: OpenCode solves first-query directly ----
     {
@@ -150,6 +151,7 @@ export class Agent {
 
           if (actionPattern.test(query) || toolDomainPattern.test(query) || toolNamePattern.test(query)) {
             log.agent('Pre-plan: action/tool-domain — skipping to agent loop')
+            skipPlanning = true
           } else if (await classifyQueryComplexity(query, model, this.modelId.bind(this))) {
             log.agent('Pre-plan: simple query — delegating to Ollama agent loop')
           } else {
@@ -205,7 +207,7 @@ export class Agent {
     {
       const hasHistory = messages.some((m) => m.role === 'assistant')
       const query = hasHistory ? '' : (messages.find((m) => m.role === 'user')?.content || '')
-      if (query.length > 30) {
+      if (!skipPlanning && query.length > 30) {
         const isComplex = !(await classifyQueryComplexity(query, model, this.modelId.bind(this)))
         if (isComplex) {
           const plan = await planWithOllama(query, model, this.modelId.bind(this), this.buildToolDescriptions())

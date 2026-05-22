@@ -20,7 +20,7 @@ export async function planWithOllama(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: modelId(model),
-        prompt: `You are a task planner. Decompose the user's request into numbered steps. For each step, specify which tool to use and its arguments.\n\nAvailable tools:\n${toolList}\n\nUser request: "${query.slice(0, 1000)}"\n\nOutput format:\nSTEP N: short description\nTOOL: tool_name(key="value", ...)\n\nRules:\n- Use ONLY tools from the list above\n- If no tool fits, write TOOL: none\n- Keep the plan to 5 steps max\n\nPlan:`,
+        prompt: `You are a task planner. Decompose the user's request into numbered steps. For each step, specify which tool to use and its arguments.\n\nAvailable tools:\n${toolList}\n\nUser request: "${query.slice(0, 1000)}"\n\nOutput format:\nSTEP N: short description\nTOOL: tool_name(key="value", ...)\n\nRules:\n- Use ONLY tools from the list above\n- Ignore schedule_task, send_email, and send_telegram UNLESS the user explicitly asked to schedule or send something\n- If no tool fits, write TOOL: none\n- Keep the plan to 3 steps max\n\nPlan:`,
         stream: false,
         options: { num_ctx: 4096, temperature: 0.1 },
       }),
