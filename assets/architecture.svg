@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" font-family="Inter, system-ui, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f1420"/>
+      <stop offset="100%" stop-color="#161c2e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0098db"/>
+      <stop offset="100%" stop-color="#0066cc"/>
+    </linearGradient>
+    <linearGradient id="server" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#1a2338"/>
+    </linearGradient>
+    <linearGradient id="tool" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1a3a2a"/>
+      <stop offset="100%" stop-color="#162820"/>
+    </linearGradient>
+    <linearGradient id="storage" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3a2a1a"/>
+      <stop offset="100%" stop-color="#2a1a10"/>
+    </linearGradient>
+    <linearGradient id="external" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2a1a3a"/>
+      <stop offset="100%" stop-color="#1a102a"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="520" rx="12" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="400" y="32" text-anchor="middle" fill="#98b0d0" font-size="11" font-weight="600" letter-spacing="2" text-transform="uppercase">LOCALCLAW ARCHITECTURE</text>
+
+  <!-- Client / Browser -->
+  <rect x="30" y="55" width="170" height="90" rx="10" fill="url(#accent)" opacity="0.12" stroke="#0098db" stroke-width="1" filter="url(#shadow)"/>
+  <text x="115" y="78" text-anchor="middle" fill="#0098db" font-size="10" font-weight="700" letter-spacing="1">CLIENT</text>
+  <text x="115" y="96" text-anchor="middle" fill="#8899b8" font-size="10">Angular 20 SPA</text>
+  <text x="115" y="112" text-anchor="middle" fill="#6a7d9a" font-size="9">Signals · WebSocket</text>
+  <text x="115" y="126" text-anchor="middle" fill="#6a7d9a" font-size="9">Theme clair/sombre</text>
+  <text x="115" y="140" text-anchor="middle" fill="#6a7d9a" font-size="9">Markdown · Widgets</text>
+
+  <!-- Double arrow Client ↔ Server -->
+  <line x1="200" y1="100" x2="260" y2="100" stroke="#0098db" stroke-width="1.2" marker-end="url(#arrowAccent)" opacity="0.6"/>
+  <line x1="260" y1="88" x2="200" y2="88" stroke="#0098db" stroke-width="1.2" opacity="0.6"/>
+  <defs>
+    <marker id="arrowAccent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#0098db"/>
+    </marker>
+  </defs>
+  <text x="230" y="82" text-anchor="middle" fill="#0098db" font-size="7" opacity="0.6">ws://</text>
+
+  <!-- Express Server -->
+  <rect x="260" y="45" width="280" height="200" rx="10" fill="url(#server)" opacity="0.25" stroke="#2a5a8a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="400" y="67" text-anchor="middle" fill="#4a8acc" font-size="11" font-weight="700" letter-spacing="1">EXPRESS SERVER</text>
+
+  <!-- Auth -->
+  <rect x="275" y="78" width="115" height="45" rx="6" fill="#1e3050" stroke="#2a5a8a" stroke-width="0.5"/>
+  <text x="332" y="96" text-anchor="middle" fill="#7a9ac0" font-size="9" font-weight="600">Auth</text>
+  <text x="332" y="111" text-anchor="middle" fill="#5a7a9a" font-size="8">Bearer token</text>
+
+  <!-- WebSocket -->
+  <rect x="398" y="78" width="127" height="45" rx="6" fill="#1e3050" stroke="#2a5a8a" stroke-width="0.5"/>
+  <text x="461" y="96" text-anchor="middle" fill="#7a9ac0" font-size="9" font-weight="600">WebSocket</text>
+  <text x="461" y="111" text-anchor="middle" fill="#5a7a9a" font-size="8">Streaming + keepalive</text>
+
+  <!-- REST API -->
+  <rect x="275" y="130" width="250" height="38" rx="6" fill="#1e3050" stroke="#2a5a8a" stroke-width="0.5"/>
+  <text x="400" y="146" text-anchor="middle" fill="#7a9ac0" font-size="9" font-weight="600">REST API</text>
+  <text x="400" y="160" text-anchor="middle" fill="#5a7a9a" font-size="8">sessions · messages · uploads · knowledge</text>
+
+  <!-- Agent Loop -->
+  <rect x="275" y="175" width="250" height="40" rx="6" fill="#1e3050" stroke="#0098db" stroke-width="0.5"/>
+  <text x="400" y="190" text-anchor="middle" fill="#0098db" font-size="9" font-weight="600">Agent Loop</text>
+  <text x="400" y="204" text-anchor="middle" fill="#5a7a9a" font-size="8">Pre-plan · Plan · Function calling · 15 iters</text>
+
+  <!-- Labels: Sub-components of Agent Loop -->
+  <rect x="275" y="220" width="60" height="17" rx="4" fill="#1a2840" stroke="#2a5a8a" stroke-width="0.3"/>
+  <text x="305" y="232" text-anchor="middle" fill="#6a8aaa" font-size="7">Prompts</text>
+  <rect x="340" y="220" width="60" height="17" rx="4" fill="#1a2840" stroke="#2a5a8a" stroke-width="0.3"/>
+  <text x="370" y="232" text-anchor="middle" fill="#6a8aaa" font-size="7">Classifier</text>
+  <rect x="405" y="220" width="60" height="17" rx="4" fill="#1a2840" stroke="#2a5a8a" stroke-width="0.3"/>
+  <text x="435" y="232" text-anchor="middle" fill="#6a8aaa" font-size="7">Planner</text>
+  <rect x="470" y="220" width="55" height="17" rx="4" fill="#1a2840" stroke="#2a5a8a" stroke-width="0.3"/>
+  <text x="497" y="232" text-anchor="middle" fill="#6a8aaa" font-size="7">OpenCode</text>
+
+  <!-- Llama/database arrow -->
+  <line x1="400" y1="245" x2="400" y2="270" stroke="#4a8acc" stroke-width="1" opacity="0.4"/>
+  <line x1="400" y1="245" x2="200" y2="270" stroke="#4a8acc" stroke-width="1" opacity="0.4"/>
+  <line x1="400" y1="245" x2="600" y2="270" stroke="#4a8acc" stroke-width="1" opacity="0.4"/>
+
+  <!-- Ollama -->
+  <rect x="560" y="270" width="210" height="75" rx="10" fill="url(#external)" opacity="0.25" stroke="#5a3a8a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="665" y="293" text-anchor="middle" fill="#9a6ae0" font-size="10" font-weight="700" letter-spacing="1">OLLAMA</text>
+  <text x="665" y="309" text-anchor="middle" fill="#7a5a9a" font-size="8">Chat LLM (qwen2.5)</text>
+  <text x="665" y="323" text-anchor="middle" fill="#7a5a9a" font-size="8">Embeddings (nomic)</text>
+  <text x="665" y="337" text-anchor="middle" fill="#7a5a9a" font-size="8">Image generation</text>
+
+  <!-- OpenCode -->
+  <rect x="560" y="355" width="210" height="55" rx="10" fill="url(#external)" opacity="0.25" stroke="#5a6a3a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="665" y="378" text-anchor="middle" fill="#8ab84a" font-size="10" font-weight="700" letter-spacing="1">OPENCODE</text>
+  <text x="665" y="394" text-anchor="middle" fill="#6a8a4a" font-size="8">Pre-planning (2 rounds)</text>
+  <text x="665" y="406" text-anchor="middle" fill="#6a8a4a" font-size="8">Dynamic tool creation</text>
+
+  <!-- SQLite -->
+  <rect x="560" y="420" width="210" height="55" rx="10" fill="url(#storage)" opacity="0.25" stroke="#8a6a3a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="665" y="443" text-anchor="middle" fill="#cca86a" font-size="10" font-weight="700" letter-spacing="1">SQLITE (WAL)</text>
+  <text x="665" y="458" text-anchor="middle" fill="#8a7a5a" font-size="8">Sessions · Messages · Memory</text>
+  <text x="665" y="470" text-anchor="middle" fill="#8a7a5a" font-size="8">FTS5 · Embedding cache · Audit</text>
+
+  <!-- Tools -->
+  <rect x="30" y="270" width="170" height="130" rx="10" fill="url(#tool)" opacity="0.25" stroke="#3a6a3a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="115" y="293" text-anchor="middle" fill="#5aaa5a" font-size="10" font-weight="700" letter-spacing="1">TOOLS</text>
+  <text x="115" y="310" text-anchor="middle" fill="#4a8a4a" font-size="8">web_fetch</text>
+  <text x="115" y="324" text-anchor="middle" fill="#3a6a3a" font-size="8">weather (widget)</text>
+  <text x="115" y="338" text-anchor="middle" fill="#3a6a3a" font-size="8">read / write_file</text>
+  <text x="115" y="352" text-anchor="middle" fill="#3a6a3a" font-size="8">run_bash (sandbox)</text>
+  <text x="115" y="366" text-anchor="middle" fill="#3a6a3a" font-size="8">send_email · telegram</text>
+  <text x="115" y="380" text-anchor="middle" fill="#3a6a3a" font-size="8">schedule_task</text>
+  <text x="115" y="394" text-anchor="middle" fill="#3a6a3a" font-size="8">create_tool (dyn.)</text>
+
+  <!-- Scheduler -->
+  <rect x="30" y="410" width="170" height="55" rx="10" fill="url(#tool)" opacity="0.25" stroke="#3a6a3a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="115" y="433" text-anchor="middle" fill="#5aaa5a" font-size="10" font-weight="700" letter-spacing="1">SCHEDULER</text>
+  <text x="115" y="449" text-anchor="middle" fill="#4a8a4a" font-size="8">Poll 30s · Retry exp.</text>
+  <text x="115" y="461" text-anchor="middle" fill="#4a8a4a" font-size="8">dag · cron · interval</text>
+
+  <!-- Plugins -->
+  <rect x="30" y="475" width="170" height="35" rx="10" fill="url(#tool)" opacity="0.25" stroke="#3a6a3a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="115" y="493" text-anchor="middle" fill="#5aaa5a" font-size="10" font-weight="700" letter-spacing="1">PLUGINS</text>
+  <text x="115" y="505" text-anchor="middle" fill="#4a8a4a" font-size="8">JS/ESM · npm packages</text>
+
+  <!-- External services -->
+  <rect x="210" y="420" width="170" height="50" rx="10" fill="url(#external)" opacity="0.25" stroke="#5a6a8a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="295" y="443" text-anchor="middle" fill="#7a9ac0" font-size="10" font-weight="700" letter-spacing="1">EXTERNAL</text>
+  <text x="295" y="458" text-anchor="middle" fill="#5a7a9a" font-size="8">SearXNG · Mailgun · Telegram</text>
+
+  <!-- Footer bars -->
+  <line x1="30" y1="250" x2="530" y2="250" stroke="#2a5a8a" stroke-width="0.3" opacity="0.3"/>
+  <line x1="210" y1="45" x2="210" y2="260" stroke="#2a5a8a" stroke-width="0.3" opacity="0.3"/>
+</svg>

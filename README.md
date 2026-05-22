@@ -44,6 +44,10 @@ All settings via `.env`. See `.env.example` for the full template.
 
 See [docs/architecture.md](docs/architecture.md) for the full agent loop, pre-planning pipeline, failure handling, and database schema.
 
+<p align="center">
+  <img src="./assets/architecture.svg" width="100%" alt="Architecture diagram">
+</p>
+
 ## Built-in Tools
 
 See [docs/tools.md](docs/tools.md) for parameter tables and the `ToolResult` widget pattern.
