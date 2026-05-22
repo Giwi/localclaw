@@ -47,7 +47,7 @@ export const weatherTool: ToolModule = {
       type: 'object',
       properties: {
         location: { type: 'string', description: 'City name (e.g. "Paris", "London", "Tokyo") or "lat,lon" coordinates' },
-        days: { type: 'string', description: 'Number of forecast days: 1-7 (default "3"). Always returns current conditions + N-day daily forecast. For tomorrow use "2", for this week use "7".' },
+        days: { type: 'string', description: 'Number of forecast days: 1-7 (default "3"). Returns current conditions + N-day daily forecast.' },
       },
       required: ['location'],
     },
@@ -77,11 +77,9 @@ export const weatherTool: ToolModule = {
 
     onChunk?.(`Fetching weather for ${displayName}...`)
 
-    const currentParams = 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,pressure_msl,uv_index'
-    let url: string
-
     const n = Math.min(Math.max(parseInt(days) || 3, 1), 7)
-    url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=${currentParams}&daily=temperature_2m_max,temperature_2m_min,weather_code,wind_speed_10m_max&timezone=auto&forecast_days=${n}`
+    const currentParams = 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,pressure_msl,uv_index'
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=${currentParams}&daily=temperature_2m_max,temperature_2m_min,weather_code,wind_speed_10m_max&timezone=auto&forecast_days=${n}`
 
     try {
       const res = await fetchWithUA(url, 15000)
