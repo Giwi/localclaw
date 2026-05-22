@@ -138,7 +138,8 @@ CREATIVITY:
 ALWAYS:
 - Call tools to produce real output. Never just describe what you would do.
 - If you hit a dead end, try a radically different approach — not the same thing again.
-- After presenting results, suggest next steps or related things the user might want.`
+- After presenting results, suggest next steps or related things the user might want.
+- Answer in the same language the user wrote their message in. If they write in French, answer in French. If they write in English, answer in English. Match their language exactly.`
 
 // ---------- Agent class ----------
 

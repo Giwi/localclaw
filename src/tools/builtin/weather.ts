@@ -47,7 +47,7 @@ export const weatherTool: ToolModule = {
       type: 'object',
       properties: {
         location: { type: 'string', description: 'City name (e.g. "Paris", "London", "Tokyo") or "lat,lon" coordinates' },
-        days: { type: 'string', description: 'Forecast days: "current" for now, "today", or "3" for 3-day (default: current)' },
+        days: { type: 'string', description: 'Forecast range: "current" = now only, "today" = current + today\'s daily, or a number (1-7) for N-day forecast including today. For tomorrow use "2", for 3-day use "3", etc. Default: "today".' },
       },
       required: ['location'],
     },
@@ -110,8 +110,18 @@ export const weatherTool: ToolModule = {
       if (data.daily) {
         const d = data.daily
         result += `\n`
+        const todayStr = new Date().toISOString().slice(0, 10)
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
         for (let i = 0; i < d.time.length; i++) {
-          const day = d.time[i] === new Date().toISOString().slice(0, 10) ? 'Today' : d.time[i]
+          let day: string
+          if (d.time[i] === todayStr) {
+            day = 'Today'
+          } else if (i === 1) {
+            day = 'Tomorrow'
+          } else {
+            const dt = new Date(d.time[i])
+            day = dayNames[dt.getUTCDay()] || d.time[i]
+          }
           const wc = WEATHER_CODES[d.weather_code[i]] || `Code ${d.weather_code[i]}`
           result += `\n${day}: ${d.temperature_2m_min[i]}–${d.temperature_2m_max[i]}°C, ${wc}`
         }

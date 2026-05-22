@@ -10,7 +10,7 @@ interface SessionRow {
   id: string; name: string; model: string; created_at: string; updated_at: string
 }
 interface MessageRow {
-  id: string; session_id: string; role: string; content: string; created_at: string
+  id: string; session_id: string; role: string; content: string; created_at: string; tool_results: string | null
 }
 interface BackgroundTaskRow {
   id: string; session_id: string; name: string; schedule: string
@@ -67,6 +67,7 @@ export function openDb(dataDir: string): BetterSqlite3.Database {
       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
       role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
       content TEXT NOT NULL,
+      tool_results TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS memory_entries (
@@ -136,6 +137,8 @@ export function openDb(dataDir: string): BetterSqlite3.Database {
     CREATE INDEX IF NOT EXISTS idx_task_executions_task ON task_executions(task_id, started_at);
   `)
 
+  try { db.exec(`ALTER TABLE messages ADD COLUMN tool_results TEXT`) } catch { /* column may already exist */ }
+
   log.debug('Database schema ready')
   // Backfill not run automatically. To migrate old data, call backfillMissingEmbeddings(db) manually.
   return db
@@ -202,15 +205,15 @@ export function addMessage(
   const id = crypto.randomUUID()
   const createdAt = new Date().toISOString()
   db.prepare(
-    'INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, msg.sessionId, msg.role, msg.content, createdAt)
+    'INSERT INTO messages (id, session_id, role, content, tool_results, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(id, msg.sessionId, msg.role, msg.content, msg.toolResults ?? null, createdAt)
   return { ...msg, id, createdAt }
 }
 
 export function getMessages(db: BetterSqlite3.Database, sessionId: string): Message[] {
   return (db
     .prepare(
-      'SELECT id, session_id, role, content, created_at FROM messages WHERE session_id = ? ORDER BY created_at'
+      'SELECT id, session_id, role, content, tool_results, created_at FROM messages WHERE session_id = ? ORDER BY created_at'
     )
     .all(sessionId) as MessageRow[])
     .map(mapMessage)
@@ -221,7 +224,7 @@ function mapSession(row: SessionRow): Session {
 }
 
 function mapMessage(row: MessageRow): Message {
-  return { id: row.id, sessionId: row.session_id, role: row.role as 'user' | 'assistant' | 'system', content: row.content, createdAt: row.created_at }
+  return { id: row.id, sessionId: row.session_id, role: row.role as 'user' | 'assistant' | 'system', content: row.content, toolResults: row.tool_results ?? undefined, createdAt: row.created_at }
 }
 
 export function storeMemory(db: BetterSqlite3.Database, sessionId: string, content: string, embedding?: number[]) {

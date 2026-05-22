@@ -28,6 +28,7 @@ const SCHEMA_SQL = `
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
     content TEXT NOT NULL,
+    tool_results TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE TABLE IF NOT EXISTS memory_entries (

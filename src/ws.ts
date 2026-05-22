@@ -126,6 +126,7 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
         let fullResponse = ''
         let eventCount = 0
         const startTime = Date.now()
+        const toolResults: {toolName: string; toolResult: string}[] = []
 
         try {
           for await (const event of agent.run(session.model, ollamaMessages, session.id)) {
@@ -138,6 +139,11 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
               log.sse(`tool_start ${event.toolName}`)
             } else if (event.type === 'tool_end') {
               log.sse(`tool_end   ${event.toolName}`)
+              const toolName = event.toolName
+              const toolResult = event.toolResult
+              if (toolName && toolResult) {
+                toolResults.push({ toolName, toolResult })
+              }
             } else if (event.type === 'status') {
               log.sse(`status     ${event.content?.slice(0, 60)}`)
             } else if (event.type === 'text') {
@@ -150,8 +156,13 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
           log.info(`Done  session=${session.id.slice(0, 8)} events=${eventCount} duration=${elapsed}s chars=${fullResponse.length}`)
 
-          if (fullResponse) {
-            addMessage(db, { sessionId: session.id, role: 'assistant', content: fullResponse })
+          if (fullResponse || toolResults.length > 0) {
+            addMessage(db, {
+              sessionId: session.id,
+              role: 'assistant',
+              content: fullResponse,
+              toolResults: toolResults.length > 0 ? JSON.stringify(toolResults) : undefined,
+            })
           }
 
         } catch (err: unknown) {

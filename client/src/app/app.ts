@@ -85,6 +85,27 @@ export class App implements OnInit, OnDestroy {
     localStorage.setItem('localclaw-theme', next)
   }
 
+  private reconstructToolEvents(msgs: Message[]) {
+    const events: ToolEvent[] = []
+    for (const msg of msgs) {
+      if (msg.toolResults) {
+        try {
+          const results = JSON.parse(msg.toolResults) as { toolName: string; toolResult: string }[]
+          for (const tr of results) {
+            events.push({
+              id: crypto.randomUUID(),
+              type: 'tool_end',
+              toolName: tr.toolName,
+              expanded: false,
+              toolResult: tr.toolResult,
+            })
+          }
+        } catch { /* skip invalid JSON */ }
+      }
+    }
+    this.toolEvents.set(events)
+  }
+
   private applyTheme() {
     document.documentElement.setAttribute('data-theme', this.currentTheme())
   }
@@ -107,7 +128,10 @@ export class App implements OnInit, OnDestroy {
     this.currentSession.set(session)
     this.toolEvents.set([])
     this.api.getMessages(session.id).subscribe({
-      next: (msgs) => this.messages.set(msgs),
+      next: (msgs) => {
+        this.messages.set(msgs)
+        this.reconstructToolEvents(msgs)
+      },
       error: () => this.showToast('Failed to load messages', 'error'),
     })
     const idx = this.sessions().findIndex((s) => s.id === session.id)

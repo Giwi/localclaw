@@ -16,6 +16,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'system'
   content: string
   createdAt: string
+  toolResults?: string
 }
 
 export interface BackgroundTask {
