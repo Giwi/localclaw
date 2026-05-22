@@ -124,7 +124,7 @@
 
   <!-- SQLite -->
   <rect x="586" y="265" width="178" height="108" rx="10" fill="#2a1a10" fill-opacity="0.25" stroke="#8a6a3a" stroke-width="1" filter="url(#sh)"/>
-  <text x="675" y="287" text-anchor="middle" fill="#cca86a" font-size="10" font-weight="700">SQLITE  (WAL mode)</text>
+  <text x="675" y="287" text-anchor="middle" fill="#cca86a" font-size="10" font-weight="700">SQLITE</text>
   <text x="675" y="305" text-anchor="middle" fill="#7a6a4a" font-size="7.5">sessions · messages (tool_results)</text>
   <text x="675" y="319" text-anchor="middle" fill="#7a6a4a" font-size="7.5">memory_entries · knowledge_chunks</text>
   <text x="675" y="333" text-anchor="middle" fill="#7a6a4a" font-size="7.5">background_tasks · task_executions</text>
