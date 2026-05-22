@@ -1,7 +1,7 @@
 {
   "name": "localclaw",
   "version": "0.1.0",
-  "description": "Nanoclaw clone using local Ollama + OpenCode agents",
+  "description": "Autonomous AI agent powered by Ollama + OpenCode — creates tools, searches the web, executes code, and manages background tasks",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

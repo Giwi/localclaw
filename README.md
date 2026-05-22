@@ -138,6 +138,8 @@ All settings via `.env`:
 
 ## How It Works
 
+See [docs/architecture.md](docs/architecture.md) for the full agent loop flow, pre-planning pipeline, failure handling, fallback chain, and database schema.
+
 1. User sends a message via the Angular UI or REST API
 2. The agent loop sends the conversation + available tools to Ollama
 3. Ollama responds with either text or tool calls
@@ -290,9 +292,13 @@ Authorization: Bearer <your-api-key>
 | `POST` | `/api/sessions/:id/upload` | Upload file (txt/pdf/docx) for chat context |
 | `GET` | `/api/background-tasks` | List background tasks (used by the UI Tasks tab) |
 | `GET` | `/api/background-tasks/:id` | Get a background task |
+| `GET` | `/api/background-tasks/:id/logs` | Get a task's execution history |
+| `POST` | `/api/background-tasks/:id/run` | Manually trigger a task run |
 | `DELETE` | `/api/background-tasks/:id` | Delete a background task |
 | `PATCH` | `/api/background-tasks/:id` | Enable/disable (pause/resume) a background task |
+| `GET` | `/api/sessions/:id/proactive` | Get proactive summary (upcoming tasks for a session) |
 | `GET` | `/api/knowledge` | List uploaded knowledge documents |
+| `POST` | `/api/knowledge/upload` | Upload file to knowledge base |
 | `DELETE` | `/api/knowledge/:id` | Delete a knowledge document |
 
 ### Chat Streaming (WebSocket)
