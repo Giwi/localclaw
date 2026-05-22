@@ -42,10 +42,10 @@ All settings via `.env`. See `.env.example` for the full template.
 
 ## Architecture
 
-See [docs/architecture.md](docs/architecture.md) for the full agent loop, pre-planning pipeline, failure handling, and database schema.
+See [docs/architecture.md](docs/architecture.md) for the full agent loop and failure handling. The decision tree:
 
 <p align="center">
-  <img src="./assets/architecture.svg" width="100%" alt="Architecture diagram">
+  <img src="./assets/decision-tree.svg" width="100%" alt="Agent decision tree">
 </p>
 
 ## Built-in Tools
