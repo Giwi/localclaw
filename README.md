@@ -6,6 +6,11 @@
 
 Autonomous AI agent powered by Ollama + OpenCode. Runs locally, creates its own tools, searches the web, executes code, and delegates complex tasks — all through a chat UI or REST API.
 
+<p align="center">
+  <img src="./assets/screenshot1.png" width="45%" alt="Chat interface">
+  <img src="./assets/screenshot2.png" width="45%" alt="Tasks dashboard">
+</p>
+
 ## Quick Start
 
 **Prerequisites:** Node.js 22+, Ollama with a model pulled, [OpenCode](https://opencode.ai) CLI, Docker (optional).
