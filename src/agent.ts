@@ -291,7 +291,7 @@ export class Agent {
 
         if (content.trim()) {
           const weakResult = lastToolResult && (lastToolResult.includes('No results') || lastToolResult.includes('not found') || lastToolResult.includes('Error:') || lastToolResult.includes('Aucun résultat') || lastToolResult.length < 30)
-          const givingUp = /(cannot find|could not find|does not contain|don't have|can't find|pas directement|ne contient pas|no relevant|rien trouvé|aucun résultat|je n'ai pas trouvé|je ne peux pas|je ne trouve pas)/i.test(content)
+          const givingUp = /(cannot find|could not find|does not contain|don't have|can't find|pas directement|ne contient pas|no relevant|rien trouvé|aucun résultat|je n'ai pas trouvé|je ne peux pas|je ne trouve pas|voici quelques liens|vous pouvez (trouver|consulter|vérifier)|available at|is available on|vous pouvez y trouver|here are some links|check out these)/i.test(content)
 
           // Priority 0: fabrication without tool
           if (!lastToolResult && content.trim().length > 50 && dynamicToolAttempts < 3) {
@@ -302,8 +302,8 @@ export class Agent {
             if (answer) { dynamicToolAttempts++; yield { type: 'text', content: answer }; return }
           }
 
-          // Priority 1: weak + advisory/giving-up
-          if ((weakResult || stuckCount > 0) && (isAdvisory || givingUp) && loop > 0 && dynamicToolAttempts < 3) {
+          // Priority 1: weak + advisory/giving-up OR stuck for 2+ cycles → escalate to OpenCode.
+          if ((weakResult || stuckCount > 0) && (isAdvisory || givingUp || stuckCount > 1) && loop > 0 && dynamicToolAttempts < 3) {
             stuckCount++
             const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
             yield { type: 'status', content: 'Finding a better answer...' }
