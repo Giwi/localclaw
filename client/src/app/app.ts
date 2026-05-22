@@ -341,7 +341,7 @@ export class App implements OnInit, OnDestroy {
     if (!text || !session || this.loading()) return
 
     // Optimistically rename "New Session" on first message
-    if (session.name === 'New Session' && text.length > 10) {
+    if (session.name === 'New Session' && text.length > 2) {
       const shortName = text.length > 50 ? text.slice(0, 50) + '...' : text
       this.sessions.update((list) =>
         list.map((s) => (s.id === session.id ? { ...s, name: shortName } : s))

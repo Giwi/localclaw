@@ -112,7 +112,7 @@ export function createWebSocket(server: Server, db: Database.Database, agent: Ag
 
         addMessage(db, { sessionId: session.id, role: 'user', content: message })
 
-        if (session.name === 'New Session' && message.length > 10) {
+        if (session.name === 'New Session' && message.length > 2) {
           const shortName = message.length > 50 ? message.slice(0, 50) + '...' : message
           updateSessionName(db, session.id, shortName)
         }
