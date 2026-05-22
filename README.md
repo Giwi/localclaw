@@ -6,9 +6,11 @@
 
 Autonomous AI agent powered by Ollama + OpenCode. Runs locally, creates its own tools, searches the web, executes code, and delegates complex tasks — all through a chat UI or REST API.
 
-<p align="center">
-  <img src="./assets/screenshot1.png" width="30%" alt="Chat"> <img src="./assets/screenshot2.png" width="30%" alt="Tasks"> <img src="./assets/screenshot3.png" width="30%" alt="Plan">
-</p>
+<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:16px 0;">
+  <img src="./assets/screenshot1.png" width="32%" alt="Chat interface" style="border-radius:8px;">
+  <img src="./assets/screenshot2.png" width="32%" alt="Tasks dashboard" style="border-radius:8px;">
+  <img src="./assets/screenshot3.png" width="32%" alt="Multi-step plan" style="border-radius:8px;">
+</div>
 
 ## Quick Start
 
