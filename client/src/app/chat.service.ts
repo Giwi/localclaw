@@ -34,6 +34,15 @@ export interface BackgroundTask {
   createdAt: string
 }
 
+export interface TaskExecution {
+  id: string
+  status: string
+  result: string | null
+  error: string | null
+  startedAt: string
+  finishedAt: string | null
+}
+
 export interface ToolEvent {
   id: string
   type: 'tool_start' | 'tool_chunk' | 'tool_end' | 'tool_error'
@@ -121,6 +130,10 @@ export class ChatService {
 
   runBackgroundTask(id: string) {
     return this.http.post(`/api/background-tasks/${id}/run`, {})
+  }
+
+  getTaskLogs(id: string) {
+    return this.http.get<{ task: BackgroundTask; history: TaskExecution[] }>(`/api/background-tasks/${id}/logs`)
   }
 
   uploadFile(sessionId: string, file: File): Observable<Message> {

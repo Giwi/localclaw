@@ -105,7 +105,7 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
     })
     res.json({
       role: 'assistant',
-      content: `👋 I have ${enabledTasks.length} scheduled task${enabledTasks.length > 1 ? 's' : ''} coming up:\n${lines.join('\n')}`,
+      content: `I have ${enabledTasks.length} scheduled task${enabledTasks.length > 1 ? 's' : ''} coming up:\n${lines.join('\n')}`,
     })
   })
 

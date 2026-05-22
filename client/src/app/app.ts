@@ -3,6 +3,7 @@ import { Subscription } from 'rxjs'
 import { ChatService, type Session, type Message, type BackgroundTask, type ToolEvent } from './chat.service'
 import { SidebarComponent } from './sidebar.component'
 import { ChatAreaComponent } from './chat-area.component'
+import { TasksPageComponent } from './tasks-page.component'
 
 export interface Toast {
   id: string
@@ -12,7 +13,7 @@ export interface Toast {
 
 @Component({
   selector: 'app-root',
-  imports: [SidebarComponent, ChatAreaComponent],
+  imports: [SidebarComponent, ChatAreaComponent, TasksPageComponent],
   templateUrl: './app.html',
 })
 export class App implements OnInit, OnDestroy {
@@ -36,6 +37,7 @@ export class App implements OnInit, OnDestroy {
   backgroundTasks = signal<BackgroundTask[]>([])
   loadingTasks = signal(false)
   dragOver = signal(false)
+  currentView = signal<'chat' | 'tasks'>('chat')
 
   private toastTimers: Record<string, ReturnType<typeof setTimeout>> = {}
   private chatSubscription: Subscription | null = null
@@ -228,6 +230,15 @@ export class App implements OnInit, OnDestroy {
   switchSidebarView(view: 'sessions' | 'tasks') {
     this.sidebarView.set(view)
     if (view === 'tasks') this.loadBackgroundTasks()
+  }
+
+  openTasksPage() {
+    this.currentView.set('tasks')
+    this.loadBackgroundTasks()
+  }
+
+  closeTasksPage() {
+    this.currentView.set('chat')
   }
 
   loadBackgroundTasks() {

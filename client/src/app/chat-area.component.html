@@ -26,6 +26,7 @@
         </span>
       </div>
       <div class="d-flex align-items-center gap-2">
+        <button (click)="openTasksPage.emit()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Tasks"><i class="bi bi-clock"></i></button>
         <button (click)="startRename.emit(session)" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Rename"><i class="bi bi-pencil"></i></button>
         <button (click)="deleteCurrent.emit()" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:6px;border-radius:6px;transition:background var(--transition);" title="Delete session"><i class="bi bi-trash"></i></button>
       </div>

@@ -55,12 +55,12 @@ function formatTvGuide(entries: TvEntry[]): string {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 
-  return `📺 *Programme TV du soir — ${dateStr}*\n\n${lines.join('\n')}`
+  return `*Programme TV du soir — ${dateStr}*\n\n${lines.join('\n')}`
 }
 
 async function sendTelegram(text: string, onChunk?: (chunk: string) => void): Promise<string> {
-  if (!BOT_TOKEN) return '❌ LOCALCLAW_TELEGRAM_BOT_TOKEN non configuré'
-  if (!DEFAULT_CHAT_ID) return '❌ LOCALCLAW_TELEGRAM_CHAT_ID non configuré'
+  if (!BOT_TOKEN) return 'ERREUR: LOCALCLAW_TELEGRAM_BOT_TOKEN non configuré'
+  if (!DEFAULT_CHAT_ID) return 'ERREUR: LOCALCLAW_TELEGRAM_CHAT_ID non configuré'
 
   onChunk?.('Envoi sur Telegram...')
 
@@ -78,11 +78,11 @@ async function sendTelegram(text: string, onChunk?: (chunk: string) => void): Pr
   const data = await res.json()
   if (data.ok) {
     log.agent('TV guide sent to Telegram')
-    return '✅ Programme TV envoyé sur Telegram'
+    return 'Programme TV envoyé sur Telegram'
   }
 
   log.agent(`Telegram send failed: ${data.description}`)
-  return `❌ Échec envoi Telegram : ${data.description || 'erreur inconnue'}`
+  return `ERREUR envoi Telegram : ${data.description || 'erreur inconnue'}`
 }
 
 export const frenchTvGuideTool: ToolModule = {
@@ -114,7 +114,7 @@ Exemples d'utilisation :
     try {
       entries = await fetchTvGuide()
     } catch (err: unknown) {
-      return `❌ Erreur lors de la récupération du programme TV : ${err instanceof Error ? err.message : String(err)}`
+      return `ERREUR lors de la récupération du programme TV : ${err instanceof Error ? err.message : String(err)}`
     }
 
     const formatted = formatTvGuide(entries)

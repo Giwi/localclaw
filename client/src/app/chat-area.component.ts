@@ -46,6 +46,7 @@ export class ChatAreaComponent implements OnChanges {
   stopGeneration = output<void>()
   startRename = output<Session>()
   deleteCurrent = output<void>()
+  openTasksPage = output<void>()
   toggleToolEvent = output<string>()
   copyText = output<string>()
   uploadFile = output<Event>()

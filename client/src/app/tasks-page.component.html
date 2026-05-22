@@ -1,0 +1,159 @@
+<div class="tasks-page">
+  <!-- Header -->
+  <div class="tasks-header">
+    <button class="tasks-back-btn" (click)="onClose.emit()">
+      <i class="bi bi-arrow-left"></i> Chat
+    </button>
+    <span class="tasks-header-title"><i class="bi bi-clock"></i> Background Tasks</span>
+    <span style="font-size:13px;color:var(--text-sidebar-muted);">{{ tasks().length }} task{{ tasks().length !== 1 ? 's' : '' }}</span>
+  </div>
+
+  <div class="tasks-body">
+    <!-- Left panel: task list -->
+    <div class="tasks-list-panel">
+      @if (loadingTasks()) {
+        <div class="tasks-empty">Loading...</div>
+      } @else {
+        @for (task of tasks(); track task.id) {
+          <div
+            class="task-list-item"
+            [class.selected]="selectedTask()?.id === task.id"
+            (click)="selectTask(task)"
+          >
+            <div class="task-list-item-name">{{ task.name }}</div>
+            <div class="task-list-item-meta">{{ task.toolName }} · {{ task.schedule }}</div>
+            <div class="task-list-item-status" [class.enabled]="task.enabled">
+              <span class="status-dot-sm" [style.background]="task.enabled ? 'var(--success)' : 'var(--text-sidebar-muted)'"></span>
+              {{ task.enabled ? 'Active' : 'Paused' }}
+            </div>
+          </div>
+        } @empty {
+          <div class="tasks-empty">
+            <i class="bi bi-clock" style="font-size:28px;display:block;margin-bottom:8px;opacity:.4;"></i>
+            No scheduled tasks<br>
+            <span style="font-size:12px;">Ask the agent to schedule one.</span>
+          </div>
+        }
+      }
+    </div>
+
+    <!-- Right panel: detail + logs -->
+    <div class="tasks-detail-panel">
+      @if (selectedTask(); as task) {
+        <!-- Task details card -->
+        <div class="detail-card">
+          <div class="detail-card-header">
+            <span>{{ task.name }}</span>
+            <div class="detail-actions">
+              <button class="btn btn-sm" [class.btn-outline-success]="!task.enabled" [class.btn-outline-warning]="task.enabled" (click)="toggleTask(task)" title="{{ task.enabled ? 'Pause' : 'Resume' }}">
+                <i class="bi" [class.bi-pause-fill]="task.enabled" [class.bi-play-fill]="!task.enabled"></i> {{ task.enabled ? 'Pause' : 'Resume' }}
+              </button>
+              <button class="btn btn-sm btn-outline-primary" (click)="runNow(task.id)" title="Run now">
+                <i class="bi bi-play-fill"></i> Run Now
+              </button>
+              <button class="btn btn-sm btn-outline-danger" (click)="deleteTask(task)" title="Delete">
+                <i class="bi bi-trash"></i> Delete
+              </button>
+            </div>
+          </div>
+          <div class="detail-card-body">
+            <div class="detail-row">
+              <span class="detail-label">Tool</span>
+              <span class="detail-value">{{ task.toolName }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Schedule</span>
+              <span class="detail-value"><code>{{ task.schedule }}</code></span>
+            </div>
+            @if (task.toolArgs !== '{}') {
+              <div class="detail-row">
+                <span class="detail-label">Arguments</span>
+                <span class="detail-value"><code style="font-size:11px;">{{ task.toolArgs }}</code></span>
+              </div>
+            }
+            <div class="detail-row">
+              <span class="detail-label">Created</span>
+              <span class="detail-value">{{ task.createdAt | date:'medium' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Last Run</span>
+              <span class="detail-value">{{ task.lastRunAt ? (task.lastRunAt | date:'medium') : '—' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Next Run</span>
+              <span class="detail-value">{{ task.nextRunAt ? (task.nextRunAt | date:'medium') : '—' }}</span>
+            </div>
+            @if (task.lastResult) {
+              <div class="detail-row">
+                <span class="detail-label">Last Result</span>
+                <span class="detail-value"><pre class="detail-pre">{{ task.lastResult }}</pre></span>
+              </div>
+            }
+            @if (task.lastError) {
+              <div class="detail-row">
+                <span class="detail-label" style="color:var(--danger);">Last Error</span>
+                <span class="detail-value"><pre class="detail-pre" style="color:var(--danger);border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08);">{{ task.lastError }}</pre></span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Execution logs -->
+        <div class="detail-card" style="margin-top:12px;">
+          <div class="detail-card-header">
+            <span>Execution Logs <span style="font-weight:400;font-size:12px;color:var(--text-sidebar-muted);">(last 20 runs)</span></span>
+            <button class="btn btn-sm btn-outline-secondary" (click)="loadExecutions(task.id)" title="Refresh">
+              <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+          </div>
+          <div class="detail-card-body" style="padding:0;">
+            @if (loadingExecs()) {
+              <div class="tasks-empty" style="padding:24px;">Loading...</div>
+            } @else {
+              <table class="exec-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Started</th>
+                    <th>Finished</th>
+                    <th>Result / Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (ex of executions(); track ex.id) {
+                    <tr>
+                      <td>
+                        <span class="exec-status" [class.success]="ex.status === 'success'" [class.failed]="ex.status === 'failed'" [class.running]="ex.status === 'running'">
+                          <span class="status-dot-sm" [style.background]="ex.status === 'success' ? 'var(--success)' : ex.status === 'failed' ? 'var(--danger)' : 'var(--warning)'"></span>
+                          {{ ex.status }}
+                        </span>
+                      </td>
+                      <td class="exec-cell">{{ ex.startedAt | date:'short' }}</td>
+                      <td class="exec-cell">{{ ex.finishedAt ? (ex.finishedAt | date:'short') : '—' }}</td>
+                      <td class="exec-cell">
+                        @if (ex.result) {
+                          <pre class="exec-pre">{{ ex.result.slice(0, 200) }}{{ ex.result.length > 200 ? '…' : '' }}</pre>
+                        } @else if (ex.error) {
+                          <pre class="exec-pre" style="color:var(--danger);">{{ ex.error.slice(0, 200) }}{{ ex.error.length > 200 ? '…' : '' }}</pre>
+                        } @else {
+                          <span style="color:var(--text-sidebar-muted);font-size:12px;">—</span>
+                        }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-sidebar-muted);font-size:13px;">No executions yet</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        </div>
+      } @else {
+        <div class="tasks-empty" style="margin-top:80px;">
+          <i class="bi bi-clock" style="font-size:36px;display:block;margin-bottom:12px;opacity:.3;"></i>
+          Select a task to view details
+        </div>
+      }
+    </div>
+  </div>
+</div>
