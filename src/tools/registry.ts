@@ -35,7 +35,6 @@ import { sendTelegramTool } from './builtin/send-telegram.js'
 import { fetchNewsTool } from './builtin/fetch-news.js'
 import { weatherTool } from './builtin/weather.js'
 import { browserAutomationTool } from './builtin/browser-automation.js'
-import { frenchTvGuideTool } from './builtin/french-tv-guide.js'
 import { wrapCommand, isSandboxAvailable } from './sandbox.js'
 
 export class ToolRegistry {
@@ -65,7 +64,6 @@ export class ToolRegistry {
       fetchNewsTool,
       weatherTool,
       browserAutomationTool,
-      frenchTvGuideTool,
       this.createToolDefinition,
     ]) {
       this.tools.set(tool.definition.name, tool)

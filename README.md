@@ -41,9 +41,20 @@ localclaw/
 │           ├── search-knowledge.ts    # RAG knowledge base search
 │           └── browser-automation.ts  # Headless Chromium browser control
 ├── client/                 # Angular 20 frontend (SPA)
+│   └── src/app/
+│       ├── app.ts, app.html            # Root component
+│       ├── components/
+│       │   ├── chat-area/              # Chat UI (messages, input, tool events)
+│       │   ├── sidebar/                # Session list + task sidebar
+│       │   ├── tasks-page/             # Full-page task manager (details + logs)
+│       │   └── weather-widget/         # Standalone weather card component
+│       ├── services/
+│       │   └── chat.service.ts         # HTTP client + WebSocket streaming
+│       └── pipes/
+│           └── markdown.pipe.ts        # Markdown → HTML rendering
 ├── searxng/
 │   └── settings.yml        # SearXNG config (JSON API + image proxy)
-├── plugins/                # Bundled plugin directory
+├── plugins/                # Bundled plugin directory (see PLUGINS.md)
 ├── compose.yml             # Ollama + SearXNG + localclaw stack
 ├── Containerfile           # Production build
 ├── .env                    # Configuration (gitignored)
@@ -148,11 +159,25 @@ All settings via `.env`:
 - **weather** — Get current weather and 3-day forecast for any location. Uses Open-Meteo (free, no API key). Forecast labels use weekday names (Friday, Saturday…) — no "Today"/"Tomorrow". Widget renders as an assistant-style bubble with Bootstrap icons.
 - **search_knowledge** — Search the local RAG knowledge base (uploaded documents + past tool results). Supports keyword and semantic search modes.
 - **schedule_task** — Schedule, unschedule, and list background tasks. Supports `every Xm`, `every Xh`, `daily at HH:MM`, `daily`, `weekly` schedules.
-- **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash. Execution respects sandbox mode.
+- **create_tool** — Dynamically create new reusable tools in JavaScript, Python, or Bash. Execution respects sandbox mode. Domain-specific tools (TV guide, stock tickers, etc.) are created on the fly at the LLM's request rather than shipped as builtins — see PLUGINS.md for the plugin system.
+
+### Tool Widgets
+
+Tools can return a `ToolResult` with a structured `widget` payload alongside the text result:
+
+```js
+{ result: 'Text for LLM', widget: { type: 'weather', data: { city: 'Tokyo', currentTemp: 22, ... } } }
+```
+
+The `result` feeds the LLM as usual. The optional `widget` carries typed data that the frontend renders directly as a native component — no fragile string parsing needed. See `components/weather-widget/` for the reference implementation. Any tool can adopt this pattern by returning a widget and adding a matching frontend component.
 
 ### RAG Memory
 
 Tool results are automatically embedded (via Ollama embeddings API) and stored in SQLite. At the start of each conversation turn, the agent retrieves semantically relevant past tool results and injects them into the system prompt — enabling cross-session memory without filling the context window.
+
+### Plugins
+
+External tools can be loaded as plugins from `plugins/` or `~/.localclaw/plugins/`. A plugin is a `.js`/`.mjs` file exporting a `ToolModule` with `definition` and `execute`. See [PLUGINS.md](PLUGINS.md) for the full plugin format, dual-response `ToolResult` pattern, and NPM package support.
 
 ### Security
 
