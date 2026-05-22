@@ -393,6 +393,7 @@ export class App implements OnInit, OnDestroy {
     }
 
     let assistantContent = ''
+    const toolResultAccum: { toolName: string; toolResult: string }[] = []
     this.chatSubscription = this.api.streamChat(session.id, text).subscribe({
       next: (chunk) => {
         if (this.currentSession()?.id !== session.id) return
@@ -403,11 +404,12 @@ export class App implements OnInit, OnDestroy {
         if (chunk.type === 'text' && chunk.content) {
           this.statusMsg.set('')
           assistantContent += chunk.content
+          const toolResultsJson = toolResultAccum.length > 0 ? JSON.stringify(toolResultAccum) : undefined
           const lastMsg = this.messages()[this.messages().length - 1]
           if (lastMsg?.role === 'assistant') {
             this.messages.update((m) => {
               const copy = [...m]
-              copy[copy.length - 1] = { ...copy[copy.length - 1], content: assistantContent }
+              copy[copy.length - 1] = { ...copy[copy.length - 1], content: assistantContent, toolResults: toolResultsJson }
               return copy
             })
           } else {
@@ -416,6 +418,7 @@ export class App implements OnInit, OnDestroy {
               sessionId: session.id,
               role: 'assistant' as const,
               content: assistantContent,
+              toolResults: toolResultsJson,
               createdAt: new Date().toISOString(),
             }])
           }
@@ -452,6 +455,19 @@ export class App implements OnInit, OnDestroy {
                 { copy[i] = { ...copy[i], type: 'tool_end', toolResult: chunk.toolResult }; break }
             return copy
           })
+          if (chunk.toolName && chunk.toolResult != null) {
+            toolResultAccum.push({ toolName: chunk.toolName, toolResult: chunk.toolResult })
+            // Patch in-flight assistant message if it exists
+            const resultsJson = JSON.stringify(toolResultAccum)
+            this.messages.update((m) => {
+              const copy = [...m]
+              const last = copy[copy.length - 1]
+              if (last?.role === 'assistant') {
+                copy[copy.length - 1] = { ...last, toolResults: resultsJson }
+              }
+              return copy
+            })
+          }
         }
         if (chunk.type === 'tool_error') {
           this.toolEvents.update((e) => {

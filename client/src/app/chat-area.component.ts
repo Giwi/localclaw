@@ -123,6 +123,18 @@ export class ChatAreaComponent implements OnChanges {
     return '\uD83C\uDF21\uFE0F'
   }
 
+  getMessageWeather(msg: Message): WeatherData | null {
+    if (!msg.toolResults) return null
+    try {
+      const results = JSON.parse(msg.toolResults) as { toolName: string; toolResult: string }[]
+      const weatherResult = results.find(r => r.toolName === 'weather')?.toolResult
+      if (!weatherResult) return null
+      return this.parseWeatherResult(weatherResult)
+    } catch {
+      return null
+    }
+  }
+
   parseWeatherResult(result: string): WeatherData | null {
     if (!result) return null
     const lines = result.split('\n').filter(l => l.trim())
