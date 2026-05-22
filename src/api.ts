@@ -26,6 +26,7 @@ import {
 } from './db.js'
 import { embed } from './embeddings.js'
 import { Agent } from './agent.js'
+import { BackgroundScheduler } from './scheduler.js'
 import { log } from './log.js'
 
 fs.mkdirSync('/tmp/localclaw_uploads', { recursive: true })
@@ -33,7 +34,7 @@ const upload = multer({ dest: '/tmp/localclaw_uploads', limits: { fileSize: 20 *
 
 const DEFAULT_MODEL = process.env.LOCALCLAW_MODEL || 'ollama/llama3.2:3b'
 
-export function createRouter(db: Database.Database, agent: Agent): Router {
+export function createRouter(db: Database.Database, agent: Agent, scheduler?: BackgroundScheduler): Router {
   const router = Router()
 
   // Request logging middleware
@@ -153,11 +154,16 @@ export function createRouter(db: Database.Database, agent: Agent): Router {
   })
 
   // POST /api/background-tasks/:id/run - manually trigger a task run
-  router.post('/background-tasks/:id/run', (req: Request, res: Response) => {
+  router.post('/background-tasks/:id/run', async (req: Request, res: Response) => {
     const task = getBackgroundTask(db, req.params.id)
     if (!task) { res.status(404).json({ error: 'Background task not found' }); return }
-    updateBackgroundTask(db, task.id, { nextRunAt: new Date().toISOString() })
-    res.json({ ok: true, message: 'Task triggered' })
+    if (!scheduler) { res.status(500).json({ error: 'Scheduler not available' }); return }
+    try {
+      await scheduler.executeTask(task)
+      res.json({ ok: true, message: 'Task executed' })
+    } catch (err: unknown) {
+      res.json({ ok: true, message: 'Task execution attempted' })
+    }
   })
 
   router.get('/knowledge', (_req: Request, res: Response) => {

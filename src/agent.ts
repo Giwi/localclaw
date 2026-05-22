@@ -204,6 +204,36 @@ export class Agent {
   }
 
   /**
+   * Fast Ollama check: is the user's query a simple greeting, small talk, or
+   * trivial question that doesn't need OpenCode's full power?
+   *
+   * Returns true if the query can be handled by Ollama alone (skip pre-plan).
+   */
+  private async classifyQueryComplexity(query: string, model: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${OLLAMA_BASE}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.modelId(model),
+          prompt: `You are a query complexity classifier. Does the user's message require external tools, current data, or complex reasoning to answer? Answer ONLY "SIMPLE" (greetings, small talk, basic questions) or "COMPLEX" (requires tools, research, code, files, web search, calculations, scheduling).
+
+Query: "${query.slice(0, 200)}"`,
+          stream: false,
+          options: { num_predict: 10, temperature: 0 },
+        }),
+        signal: AbortSignal.timeout(5000),
+      })
+      if (!res.ok) return false
+      const data = await res.json()
+      return (data.response || '').toUpperCase().includes('SIMPLE')
+    } catch {
+      // On error, assume complex to be safe
+      return false
+    }
+  }
+
+  /**
    * Ask OpenCode to answer the user's question directly.
    *
    * Runs multiple prompts in parallel across 2 rounds.  OpenCode is a capable
@@ -450,7 +480,9 @@ export class Agent {
           // Action requests skip pre-plan and go directly to the agent loop.
           const actionPattern = /(tous les jours|chaque (jour|semaine|mois)|schedule|remind|rappel|every (day|week|hour|\d+)|daily|weekly|send (to|me)|envoyer|recevoir|${TOOL_SEND_EMAIL}|${TOOL_SCHEDULE_TASK}|write (a|this|the) file|créer|sauvegarder)/i
           if (actionPattern.test(query) || toolDomainPattern.test(query) || toolNamePattern.test(query)) {
-            log.agent(`Pre-plan: action or tool-domain request detected, skipping to agent loop`)
+            log.agent('Pre-plan: action/tool-domain request — skipping to agent loop')
+          } else if (await this.classifyQueryComplexity(query, model)) {
+            log.agent('Pre-plan: simple query — delegating to Ollama agent loop')
           } else {
             const prePlanResult = await this.solveWithOpencode(query)
 

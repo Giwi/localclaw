@@ -15,6 +15,32 @@
     }
   </div>
 
+  <app-sidebar
+    [sidebarOpen]="sidebarOpen()"
+    [sessions]="sessions()"
+    [currentSession]="currentSession()"
+    [sidebarView]="sidebarView()"
+    [backgroundTasks]="backgroundTasks()"
+    [loadingTasks]="loadingTasks()"
+    [renamingId]="renamingId()"
+    [renameInput]="renameInput()"
+    [selectedSessionIndex]="selectedSessionIndex()"
+    [currentTheme]="currentTheme()"
+    (newSession)="newSession()"
+    (selectSession)="selectSession($event)"
+    (deleteSession)="deleteSession($event.event, $event.id)"
+    (startRename)="startRename($event)"
+    (commitRename)="commitRename($event)"
+    (cancelRename)="cancelRename()"
+    (switchSidebarView)="switchSidebarView($event)"
+    (toggleTheme)="toggleTheme()"
+    (toggleTask)="toggleTask($event)"
+    (runTask)="runTask($event)"
+    (deleteBgTask)="deleteBgTask($event.event, $event.task)"
+    (onSessionKeydown)="onSessionKeydown($event)"
+    (renameInputChange)="renameInput.set($event)"
+  ></app-sidebar>
+
   @if (currentView() === 'tasks') {
     <app-tasks-page
       [tasks]="backgroundTasks()"
@@ -23,32 +49,6 @@
       (onTasksChanged)="loadBackgroundTasks()"
     ></app-tasks-page>
   } @else {
-    <app-sidebar
-      [sidebarOpen]="sidebarOpen()"
-      [sessions]="sessions()"
-      [currentSession]="currentSession()"
-      [sidebarView]="sidebarView()"
-      [backgroundTasks]="backgroundTasks()"
-      [loadingTasks]="loadingTasks()"
-      [renamingId]="renamingId()"
-      [renameInput]="renameInput()"
-      [selectedSessionIndex]="selectedSessionIndex()"
-      [currentTheme]="currentTheme()"
-      (newSession)="newSession()"
-      (selectSession)="selectSession($event)"
-      (deleteSession)="deleteSession($event.event, $event.id)"
-      (startRename)="startRename($event)"
-      (commitRename)="commitRename($event)"
-      (cancelRename)="cancelRename()"
-      (switchSidebarView)="switchSidebarView($event)"
-      (toggleTheme)="toggleTheme()"
-      (toggleTask)="toggleTask($event)"
-      (runTask)="runTask($event)"
-      (deleteBgTask)="deleteBgTask($event.event, $event.task)"
-      (onSessionKeydown)="onSessionKeydown($event)"
-      (renameInputChange)="renameInput.set($event)"
-    ></app-sidebar>
-
     <app-chat-area
       [currentSession]="currentSession()"
       [messages]="messages()"

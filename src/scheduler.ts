@@ -89,7 +89,7 @@ export class BackgroundScheduler {
     }
   }
 
-  private async executeTask(task: BackgroundTask): Promise<void> {
+  async executeTask(task: BackgroundTask): Promise<void> {
     const tool = this.registry.get(task.toolName)
     if (!tool) {
       log.agent(`Scheduler: tool "${task.toolName}" not found for task "${task.name}"`)

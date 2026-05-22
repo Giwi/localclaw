@@ -71,7 +71,7 @@ app-sidebar {
   flex-shrink: 0;
 }
 
-app-chat-area {
+app-chat-area, app-tasks-page {
   display: flex;
   flex-direction: column;
   flex: 1;
